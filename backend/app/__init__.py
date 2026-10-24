@@ -145,10 +145,28 @@ def _register_jwt_handlers(app):
 
 def _register_blueprints(app):
     from app.admin import admin_bp
+    from app.analytics import analytics_bp
     from app.auth import auth_bp
+    from app.courses import courses_bp
+    from app.notifications import notifications_bp
+    from app.planner import planner_bp
+    from app.resources import materials_bp
+    from app.student import student_bp
+    from app.syllabus import syllabus_bp
+
+    student_prefix = f"{API_PREFIX}/student"
 
     app.register_blueprint(auth_bp, url_prefix=f"{API_PREFIX}/auth")
     app.register_blueprint(admin_bp, url_prefix=f"{API_PREFIX}/admin")
+    app.register_blueprint(courses_bp, url_prefix=f"{API_PREFIX}/courses")
+    # Several student-facing blueprints share the /student prefix; blueprint
+    # names stay unique so endpoint names never collide.
+    app.register_blueprint(student_bp, url_prefix=student_prefix)
+    app.register_blueprint(syllabus_bp, url_prefix=student_prefix)
+    app.register_blueprint(planner_bp, url_prefix=student_prefix)
+    app.register_blueprint(analytics_bp, url_prefix=student_prefix)
+    app.register_blueprint(materials_bp, url_prefix=student_prefix)
+    app.register_blueprint(notifications_bp, url_prefix=student_prefix)
 
 
 def _register_core_routes(app):

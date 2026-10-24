@@ -4,8 +4,15 @@ Files live under `backend/uploads/` and are never served from a predictable
 static path; every download goes through a permission-checked endpoint.
 """
 
+import secrets
+
 from app.extensions import db
 from app.models.mixins import CreatedAtMixin, TimestampMixin
+
+
+def new_access_token():
+    """Opaque, unguessable download handle for a stored file."""
+    return secrets.token_urlsafe(32)
 
 RESOURCE_TYPES = (
     "pdf",
@@ -61,6 +68,15 @@ class Resource(TimestampMixin, db.Model):
     )
     download_count = db.Column(db.Integer, nullable=False, default=0)
     last_accessed_at = db.Column(db.DateTime, nullable=True)
+    # Opaque handle used in the download URL so a stored file is never
+    # reachable through a guessable path (PRD 3.10 / 10.1).
+    access_token = db.Column(
+        db.String(64),
+        nullable=True,
+        unique=True,
+        index=True,
+        default=new_access_token,
+    )
 
     owner = db.relationship(
         "User", back_populates="owned_resources", foreign_keys=[owner_id]
