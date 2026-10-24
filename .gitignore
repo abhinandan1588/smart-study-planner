@@ -5,4 +5,5 @@ __pycache__/
 .env
 frontend/node_modules/
 frontend/dist/
-uploads/
+backend/uploads/*
+!backend/uploads/.gitkeep
