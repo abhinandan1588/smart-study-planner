@@ -145,6 +145,7 @@ def _register_jwt_handlers(app):
 
 def _register_blueprints(app):
     from app.admin import admin_bp
+    from app.ai_assistant import ai_bp
     from app.analytics import analytics_bp
     from app.auth import auth_bp
     from app.courses import courses_bp
@@ -167,6 +168,9 @@ def _register_blueprints(app):
     app.register_blueprint(analytics_bp, url_prefix=student_prefix)
     app.register_blueprint(materials_bp, url_prefix=student_prefix)
     app.register_blueprint(notifications_bp, url_prefix=student_prefix)
+    # The AI assistant answers on the PRD 8.2 path and on the shorter /ai path.
+    app.register_blueprint(ai_bp, url_prefix=f"{student_prefix}/ai")
+    app.register_blueprint(ai_bp, url_prefix=f"{API_PREFIX}/ai", name="ai_short")
 
 
 def _register_core_routes(app):

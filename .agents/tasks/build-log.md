@@ -4946,3 +4946,995 @@ syllabus.topic_created          syllabus.topic_updated
 syllabus.unit_created           syllabus.version_created
 syllabus.version_published
 ```
+
+## backend-ai
+
+Phase 4 of the plan: the AI Study Assistant (PRD 3.9, contract in PRD 8.2).
+Built on the existing app factory, models, auth decorators, error envelope,
+pagination helpers and upload storage. No new third-party dependency: the
+provider call uses `urllib` from the standard library and retrieval is a
+pure-Python TF-IDF ranking over the existing `document_chunks` table.
+
+### New modules
+
+```
+app/ai_assistant/__init__.py      blueprint
+app/ai_assistant/provider.py      OpenAI / Gemini integration, status, timeouts, error mapping
+app/ai_assistant/rag.py           PDF + text extraction, chunking, TF-IDF retrieval, permission filter
+app/ai_assistant/prompts.py       system prompt, level/mode guidance, numbered citation block
+app/ai_assistant/routes.py        the 14 endpoints below
+app/ai_assistant/serializers.py   conversation / message / document payloads
+```
+
+Shared code touched:
+
+| File | Change |
+|---|---|
+| `config.py` | `_ai_provider()` resolver; `AI_TIMEOUT_SECONDS`, `AI_MAX_MESSAGE_CHARS`, `AI_MAX_HISTORY_MESSAGES`, `AI_RETRIEVAL_TOP_K`, `AI_MAX_OUTPUT_TOKENS`, `AI_DISCLAIMER` |
+| `app/common/access.py` | `enrolled_course_ids`, `resource_visibility_filter`, `can_access_resource` moved here from the materials blueprint so retrieval and download share one rule set |
+| `app/resources/routes.py` | now imports those three helpers instead of defining its own copies (call sites unchanged) |
+| `app/common/errors.py` | 429 responses carry a readable message instead of the raw limiter string |
+| `app/__init__.py` | registers `ai_bp` twice: `/api/v1/student/ai` (PRD 8.2) and `/api/v1/ai` |
+| `backend/.env.example` | documents every AI variable and that a blank key is a supported configuration |
+
+### Migrations
+
+No schema change was needed — `ai_conversations`, `ai_messages` and
+`document_chunks` were already created by the initial migration, so the seed
+data was left in place.
+
+```bash
+cd "/home/abhi/Apps/Study planner/backend"
+export FLASK_APP=run.py
+.venv/bin/flask db upgrade
+.venv/bin/flask db migrate -m "ai assistant check"
+```
+
+```
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+...
+INFO  [alembic.env] No changes in schema detected.
+```
+
+### Boot (background, never foregrounded), no API key configured
+
+```bash
+cd "/home/abhi/Apps/Study planner/backend"
+ls -la .env            # ls: cannot access '.env': No such file or directory
+env | grep -E "OPENAI_API_KEY|GEMINI_API_KEY|AI_API_KEY"   # (no AI key env vars set)
+nohup .venv/bin/python run.py > /tmp/flask.log 2>&1 &
+tail -f /tmp/flask.log
+```
+
+```
+2026-10-24 22:31:01,596 INFO     app: Smart Study Planner API ready (env=development, db=sqlite:////home/abhi/Apps/Study planner/backend/instance/app.db)
+ * Serving Flask app 'app'
+ * Debug mode: on
+2026-10-24 22:31:01,615 INFO     werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-10-24 22:31:01,615 INFO     werkzeug: Press CTRL+C to quit
+```
+
+Clean boot with no key configured and no import errors.
+
+### Routes registered by this phase (14, served on both prefixes)
+
+```
+GET     /api/v1/student/ai/status
+GET     /api/v1/student/ai/conversations
+POST    /api/v1/student/ai/conversations
+GET     /api/v1/student/ai/conversations/<int:conversation_id>
+PATCH   /api/v1/student/ai/conversations/<int:conversation_id>
+DELETE  /api/v1/student/ai/conversations/<int:conversation_id>
+GET     /api/v1/student/ai/conversations/<int:conversation_id>/messages
+GET     /api/v1/student/ai/documents
+POST    /api/v1/student/ai/documents
+DELETE  /api/v1/student/ai/documents/<int:resource_id>
+POST    /api/v1/student/ai/retrieve
+POST    /api/v1/student/ai/chat
+POST    /api/v1/student/ai/quiz
+POST    /api/v1/student/ai/flashcards
+```
+
+The same views are also reachable under `/api/v1/ai/...` (blueprint registered
+a second time as `ai_short`), confirmed with `flask routes`.
+
+### Retrieval approach
+
+No vector database and no embedding service. `rag.py` extracts text with
+`pypdf` for PDFs (one entry per page, so citations can name the page) and reads
+`txt` / `md` / `csv` directly, splits it into ~900-character chunks with 150
+characters of overlap preferring sentence boundaries, and stores them in
+`document_chunks`. At query time the candidate chunk set is scored with a
+pure-Python TF-IDF cosine ranking: document frequencies are computed over the
+candidate set, query and chunk vectors use `1 + log(tf)` term weights and
+`log((N+1)/(df+1)) + 1` inverse document frequency, and the result is sorted by
+score, then term coverage, then chunk identity so repeated runs are
+deterministic. The top-k chunks become a numbered passage block in the prompt
+and are returned as citations on the stored assistant message.
+
+Every candidate query begins with `resource_visibility_filter` — the same
+filter the download endpoint uses — so the chunk set is restricted at the SQL
+level to the caller's own uploads, published public material, published
+`enrolled_only` material for an enrolled course, and `resource_permissions`
+grants. Explicitly passed `resource_ids` are permission-checked one by one and
+unauthorised ids are dropped rather than widening the search.
+
+### Degradation behaviour
+
+| Condition | Behaviour |
+|---|---|
+| No key in the environment | `GET /ai/status` returns `ai_configured: false`, `provider: "offline"`, `mode: "offline_retrieval_only"` and a human message |
+| No key, `POST /ai/chat` | HTTP **200** with `ai_configured: false`, `code: "AI_NOT_CONFIGURED"`, a `notice` string, and an assistant message quoting the retrieved passages with their citations — the conversation is still persisted |
+| No key, `POST /ai/quiz` or `/ai/flashcards` | HTTP **503** `{"error":{"code":"AI_NOT_CONFIGURED","ai_configured":false,"message":...}}` |
+| Key present but rejected by the provider | HTTP **503** `AI_AUTH_FAILED`, not a 500 |
+| Provider timeout / unreachable / unparseable | HTTP **503** `AI_TIMEOUT` / `AI_UNREACHABLE` / `AI_BAD_RESPONSE` |
+| Any case | the rest of the API is untouched; nothing in the AI path can raise a 500 |
+
+The key is read only from `current_app.config["AI_API_KEY"]` (populated from
+`AI_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY`) and is used solely to sign
+the outbound HTTPS request. It is not logged and not present in any response
+payload — `GET /ai/status` reports the provider name and model only.
+
+### Guardrails verified
+
+| Guardrail | Evidence |
+|---|---|
+| Message length | 4100-character message → 422 `VALIDATION_ERROR` (step 17) |
+| Per-user rate limit | `AI_RATE_LIMIT=3 per minute` → 4th call by student A is 429, student B's bucket unaffected (rate-limit run below) |
+| Provider timeout | `AI_TIMEOUT_SECONDS` honoured, timeout mapped to 503 `AI_TIMEOUT` |
+| Ownership | cross-student conversation read / delete → 404 (steps 15, 16) |
+| Document permission | cross-student index / retrieval / download → 404 or zero chunks (steps 10-14) |
+| Enrollment | chat scoped to a course the caller is not enrolled in → 403 (step 20) |
+| Authentication | unauthenticated chat → 401 (step 21) |
+
+### curl evidence
+
+`$B` = `http://127.0.0.1:5000/api/v1`. `$A` is the access token of seeded
+student Aarav (id 2), `$P` of seeded student Priya (id 3). Script:
+`bash /tmp/verify_ai.sh`. Bodies below are verbatim.
+
+```
+student A (Aarav, id 2) token length: 417
+student B (Priya, id 3) token length: 417
+
+### 1. AI status endpoint (no key configured)
+$ curl -s $B/student/ai/status -H "Authorization: Bearer $A"
+{
+  "ai_configured": false,
+  "capabilities": {
+    "chat": true,
+    "document_retrieval": true,
+    "flashcards": false,
+    "generated_answers": false,
+    "quiz": false
+  },
+  "disclaimer": "AI answers may contain errors. Check anything important against your course material.",
+  "features": [
+    "explain",
+    "summary",
+    "quiz",
+    "flashcards",
+    "revision_plan",
+    "breakdown"
+  ],
+  "limits": {
+    "max_message_chars": 4000,
+    "rate_limit": "20 per hour",
+    "retrieval_top_k": 4,
+    "timeout_seconds": 30
+  },
+  "message": "The AI provider is not configured on this server, so answers are built from your authorised study material instead of a language model. Ask an administrator to set OPENAI_API_KEY or GEMINI_API_KEY to enable generated answers.",
+  "mode": "offline_retrieval_only",
+  "model": null,
+  "provider": "offline"
+}
+
+HTTP 200
+
+### 1b. Same blueprint on the short /api/v1/ai prefix
+$ curl -s $B/ai/status -H "Authorization: Bearer $A"
+{
+  "ai_configured": false,
+  "capabilities": {
+    "chat": true,
+    "document_retrieval": true,
+    "flashcards": false,
+    "generated_answers": false,
+    "quiz": false
+  },
+  "disclaimer": "AI answers may contain errors. Check anything important against your course material.",
+  "features": [
+    "explain",
+    "summary",
+    "quiz",
+    "flashcards",
+    "revision_plan",
+    "breakdown"
+  ],
+  "limits": {
+    "max_message_chars": 4000,
+    "rate_limit": "20 per hour",
+    "retrieval_top_k": 4,
+    "timeout_seconds": 30
+  },
+  "message": "The AI provider is not configured on this server, so answers are built from your authorised study material instead of a language model. Ask an administrator to set OPENAI_API_KEY or GEMINI_API_KEY to enable generated answers.",
+  "mode": "offline_retrieval_only",
+  "model": null,
+  "provider": "offline"
+}
+
+HTTP 200
+
+### 2. Create a conversation
+$ curl -s -X POST $B/student/ai/conversations -d '{"title":"Polity doubts","course_id":1}'
+{
+  "conversation": {
+    "course_id": 1,
+    "course_title": "UPSC Civil Services \u2014 Prelims",
+    "created_at": "2026-10-24T16:56:33.777152",
+    "id": 4,
+    "last_message_at": null,
+    "message_count": 0,
+    "title": "Polity doubts",
+    "topic_id": null,
+    "topic_title": null,
+    "updated_at": "2026-10-24T16:56:33.777158"
+  }
+}
+HTTP 201 (conversation_id=4)
+
+### 3. List conversations
+$ curl -s "$B/student/ai/conversations?per_page=3"
+{
+  "has_next": false,
+  "has_prev": false,
+  "items": [
+    {
+      "course_id": 1,
+      "course_title": "UPSC Civil Services \u2014 Prelims",
+      "created_at": "2026-10-24T16:56:33.777152",
+      "id": 4,
+      "last_message_at": null,
+      "message_count": 0,
+      "title": "Polity doubts",
+      "topic_id": null,
+      "topic_title": null,
+      "updated_at": "2026-10-24T16:56:33.777158"
+    },
+    {
+      "course_id": 1,
+      "course_title": "UPSC Civil Services \u2014 Prelims",
+      "created_at": "2026-10-24T16:22:05.641513",
+      "id": 1,
+      "last_message_at": "2026-10-24T16:22:05.645128",
+      "message_count": 2,
+      "title": "UPSC Civil Services \u2014 Prelims doubts",
+      "topic_id": null,
+      "topic_title": null,
+      "updated_at": "2026-10-24T16:22:05.641521"
+    }
+  ],
+  "page": 1,
+  "pages": 1,
+  "per_page": 3,
+  "total": 2
+}
+
+HTTP 200
+
+### 4. Chat with NO API key configured — graceful degradation
+$ curl -s -X POST $B/student/ai/chat -d '{"conversation_id":'4',"message":"Explain the doctrine of basic structure"}'
+{
+  "ai_configured": false,
+  "code": "AI_NOT_CONFIGURED",
+  "conversation_id": 4,
+  "disclaimer": "AI answers may contain errors. Check anything important against your course material.",
+  "message": {
+    "content": "AI generation is switched off on this server and no authorised document matched your question. Upload a PDF or text note under Study Materials and index it, then ask again to see the matching passages.",
+    "conversation_id": 4,
+    "created_at": "2026-10-24T16:56:33.901881",
+    "id": 8,
+    "role": "assistant",
+    "sources": [],
+    "tokens": null
+  },
+  "notice": "The AI provider is not configured on this server, so answers are built from your authorised study material instead of a language model. Ask an administrator to set OPENAI_API_KEY or GEMINI_API_KEY to enable generated answers.",
+  "provider": "offline",
+  "retrieval": {
+    "candidate_chunks": 0,
+    "method": "tfidf_cosine",
+    "searched_resource_ids": [],
+    "top_k": 4
+  }
+}
+
+HTTP 200
+
+### 5. Upload a small text document and index it for retrieval
+$ curl -s -X POST $B/student/ai/documents -F file=@/tmp/polity-notes.txt -F 'title=Polity revision notes' -F course_id=1
+{
+  "document": {
+    "chunk_count": 2,
+    "course_id": 1,
+    "course_title": "UPSC Civil Services \u2014 Prelims",
+    "created_at": "2026-10-24T16:56:33.934937",
+    "file_size_bytes": 1325,
+    "indexed": true,
+    "is_own_upload": true,
+    "mime_type": "text/plain",
+    "resource_id": 12,
+    "resource_type": "note",
+    "title": "Polity revision notes",
+    "topic_id": null,
+    "visibility": "private"
+  },
+  "index": {
+    "chars": 1473,
+    "chunks": 2,
+    "pages": 1,
+    "reindexed": false,
+    "resource_id": 12
+  }
+}
+HTTP 201 (resource_id=12)
+
+### 6. Confirm the chunks exist (document list for student A)
+$ curl -s "$B/student/ai/documents?indexed=true"
+{
+  "has_next": false,
+  "has_prev": false,
+  "items": [
+    {
+      "chunk_count": 2,
+      "course_id": 1,
+      "course_title": "UPSC Civil Services \u2014 Prelims",
+      "created_at": "2026-10-24T16:56:33.934937",
+      "file_size_bytes": 1325,
+      "indexed": true,
+      "is_own_upload": true,
+      "mime_type": "text/plain",
+      "resource_id": 12,
+      "resource_type": "note",
+      "title": "Polity revision notes",
+      "topic_id": null,
+      "visibility": "private"
+    }
+  ],
+  "page": 1,
+  "pages": 1,
+  "per_page": 20,
+  "total": 1,
+  "total_indexed_chunks": 2
+}
+
+HTTP 200
+
+### 6b. Chunk rows in SQLite for that resource
+$ sqlite3 instance/app.db 'select id, resource_id, chunk_index, page_number, char_count from document_chunks where resource_id=12'
+(1, 12, 0, None, 868)
+(2, 12, 1, None, 605)
+2 chunk rows
+
+### 7. Retrieval path — top-k chunks for a question
+$ curl -s -X POST $B/student/ai/retrieve -d '{"question":"What is the basic structure doctrine and which case established it?"}'
+{
+  "chunks": [
+    {
+      "chunk_index": 0,
+      "matched_terms": 4,
+      "page_number": null,
+      "resource_id": 12,
+      "score": 0.3098,
+      "snippet": "Indian Polity - Revision Notes\n\nBasic Structure Doctrine\nThe basic structure doctrine holds that the Indian Parliament cannot amend\nthe Constitution in a way that destroys its fundamental framework. It was\nestablished by the Supreme Court in Kesavananda Bharati v. State of Kerala\nin 1973. Features treated as part of the basic structure include the\nsupremacy of the Constitution, the republican and democratic form of\ng",
+      "title": "Polity revision notes"
+    }
+  ],
+  "question": "What is the basic structure doctrine and which case established it?",
+  "retrieval": {
+    "candidate_chunks": 2,
+    "matched_chunks": 1,
+    "method": "tfidf_cosine",
+    "query_terms": [
+      "basic",
+      "case",
+      "doctrine",
+      "established",
+      "structure"
+    ],
+    "searched_resource_ids": [
+      12
+    ],
+    "top_k": 4
+  }
+}
+
+HTTP 200
+
+### 7b. A second, different question ranks different chunks
+$ curl -s -X POST $B/student/ai/retrieve -d '{"question":"Which article gives the Supreme Court power to issue writs?","top_k":2}'
+{
+  "chunks": [
+    {
+      "chunk_index": 1,
+      "matched_terms": 7,
+      "page_number": null,
+      "resource_id": 12,
+      "score": 0.3723,
+      "snippet": "ng speech and expression. Article 21 protects life and personal\nliberty and has been read to include the right to privacy and the right to\neducation. Article 32 gives the Supreme Court the power to issue writs for\nthe enforcement of Fundamental Rights.\n\nDirective Principles of State Policy\nThe Directive Principles are in Part IV, Articles 36 to 51. They are not\nenforceable by any court but are fundamental in the gove",
+      "title": "Polity revision notes"
+    },
+    {
+      "chunk_index": 0,
+      "matched_terms": 3,
+      "page_number": null,
+      "resource_id": 12,
+      "score": 0.0991,
+      "snippet": "Indian Polity - Revision Notes\n\nBasic Structure Doctrine\nThe basic structure doctrine holds that the Indian Parliament cannot amend\nthe Constitution in a way that destroys its fundamental framework. It was\nestablished by the Supreme Court in Kesavananda Bharati v. State of Kerala\nin 1973. Features treated as part of the basic structure include the\nsupremacy of the Constitution, the republican and democratic form of\ng",
+      "title": "Polity revision notes"
+    }
+  ],
+  "question": "Which article gives the Supreme Court power to issue writs?",
+  "retrieval": {
+    "candidate_chunks": 2,
+    "matched_chunks": 2,
+    "method": "tfidf_cosine",
+    "query_terms": [
+      "article",
+      "court",
+      "gives",
+      "issue",
+      "power",
+      "supreme",
+      "writs"
+    ],
+    "searched_resource_ids": [
+      12
+    ],
+    "top_k": 2
+  }
+}
+
+HTTP 200
+
+### 8. Chat again — the offline answer now cites the uploaded document
+$ curl -s -X POST $B/student/ai/chat -d '{"conversation_id":'4',"message":"Which case established the basic structure doctrine?"}'
+{
+  "ai_configured": false,
+  "code": "AI_NOT_CONFIGURED",
+  "conversation_id": 4,
+  "disclaimer": "AI answers may contain errors. Check anything important against your course material.",
+  "message": {
+    "content": "AI generation is switched off on this server, so here are the most relevant passages from your authorised study material for \"Which case established the basic structure doctrine?\":\n\n[1] Polity revision notes\nIndian Polity - Revision Notes\n\nBasic Structure Doctrine\nThe basic structure doctrine holds that the Indian Parliament cannot amend\nthe Constitution in a way that destroys its fundamental framework. It was\nestablished by the Supreme Court in Kesavananda Bharati v. State of Kerala\nin 1973. Features treated as part of the basic structure include the\nsupremacy of the Constitution, the republican and democratic form of\ng",
+    "conversation_id": 4,
+    "created_at": "2026-10-24T16:56:34.245154",
+    "id": 10,
+    "role": "assistant",
+    "sources": [
+      {
+        "chunk_index": 0,
+        "page_number": null,
+        "resource_id": 12,
+        "score": 0.3098,
+        "snippet": "Indian Polity - Revision Notes\n\nBasic Structure Doctrine\nThe basic structure doctrine holds that the Indian Parliament cannot amend\nthe Constitution in a way that destroys its fundamental framework. It was\nestablished by the Supreme Court in Kesavananda Bharati v. State of Kerala\nin 1973. Features treated as part of the basic structure include the\nsupremacy of the Constitution, the republican and democratic form of\ng",
+        "title": "Polity revision notes"
+      }
+    ],
+    "tokens": null
+  },
+  "notice": "The AI provider is not configured on this server, so answers are built from your authorised study material instead of a language model. Ask an administrator to set OPENAI_API_KEY or GEMINI_API_KEY to enable generated answers.",
+  "provider": "offline",
+  "retrieval": {
+    "candidate_chunks": 2,
+    "matched_chunks": 1,
+    "method": "tfidf_cosine",
+    "query_terms": [
+      "basic",
+      "case",
+      "doctrine",
+      "established",
+      "structure"
+    ],
+    "searched_resource_ids": [
+      12
+    ],
+    "top_k": 4
+  }
+}
+
+HTTP 200
+
+### 9. Paginated message history for the conversation
+$ curl -s "$B/student/ai/conversations/4/messages?per_page=2&page=1"
+{
+  "conversation_id": 4,
+  "has_next": true,
+  "has_prev": false,
+  "items": [
+    {
+      "content": "Explain the doctrine of basic structure",
+      "conversation_id": 4,
+      "created_at": "2026-10-24T16:56:33.896485",
+      "id": 7,
+      "role": "user",
+      "sources": [],
+      "tokens": null
+    },
+    {
+      "content": "AI generation is switched off on this server and no authorised document matched your question. Upload a PDF or text note under Study Materials and index it, then ask again to see the matching passages.",
+      "conversation_id": 4,
+      "created_at": "2026-10-24T16:56:33.901881",
+      "id": 8,
+      "role": "assistant",
+      "sources": [],
+      "tokens": null
+    }
+  ],
+  "page": 1,
+  "pages": 2,
+  "per_page": 2,
+  "total": 4
+}
+
+HTTP 200
+
+=== PERMISSION CHECKS: student B (Priya) against student A's private upload ===
+
+### 10. Student B tries to index student A's private document (must be 404)
+$ curl -s -X POST $B/student/ai/documents -H "Authorization: Bearer $P" -d '{"resource_id":'12'}'
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "That document was not found."
+  }
+}
+
+HTTP 404
+
+### 11. Student B asks for retrieval restricted to that resource id (must return zero chunks)
+$ curl -s -X POST $B/student/ai/retrieve -H "Authorization: Bearer $P" -d '{"question":"basic structure doctrine","resource_ids":['12']}'
+{
+  "chunks": [],
+  "question": "basic structure doctrine",
+  "retrieval": {
+    "candidate_chunks": 0,
+    "method": "tfidf_cosine",
+    "searched_resource_ids": [],
+    "top_k": 4
+  }
+}
+
+HTTP 200
+
+### 12. Student B unrestricted retrieval — student A's chunks must not appear
+$ curl -s -X POST $B/student/ai/retrieve -H "Authorization: Bearer $P" -d '{"question":"basic structure doctrine Kesavananda Bharati"}'
+{
+  "chunks": [],
+  "question": "basic structure doctrine Kesavananda Bharati",
+  "retrieval": {
+    "candidate_chunks": 0,
+    "method": "tfidf_cosine",
+    "searched_resource_ids": [],
+    "top_k": 4
+  }
+}
+
+HTTP 200
+
+### 13. Student B chats about it — no citation from A's document
+$ curl -s -X POST $B/student/ai/chat -H "Authorization: Bearer $P" -d '{"message":"Explain the basic structure doctrine"}'
+{
+  "ai_configured": false,
+  "code": "AI_NOT_CONFIGURED",
+  "conversation_id": 5,
+  "disclaimer": "AI answers may contain errors. Check anything important against your course material.",
+  "message": {
+    "content": "AI generation is switched off on this server and no authorised document matched your question. Upload a PDF or text note under Study Materials and index it, then ask again to see the matching passages.",
+    "conversation_id": 5,
+    "created_at": "2026-10-24T16:56:34.566695",
+    "id": 12,
+    "role": "assistant",
+    "sources": [],
+    "tokens": null
+  },
+  "notice": "The AI provider is not configured on this server, so answers are built from your authorised study material instead of a language model. Ask an administrator to set OPENAI_API_KEY or GEMINI_API_KEY to enable generated answers.",
+  "provider": "offline",
+  "retrieval": {
+    "candidate_chunks": 0,
+    "method": "tfidf_cosine",
+    "searched_resource_ids": [],
+    "top_k": 4
+  }
+}
+
+HTTP 200
+
+### 14. Student B downloads the file directly (must be 404)
+$ curl -s $B/student/resources/12/file -H "Authorization: Bearer $P"
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "That resource was not found."
+  }
+}
+
+HTTP 404
+
+### 15. Student B opens student A's conversation (must be 404)
+$ curl -s $B/student/ai/conversations/4 -H "Authorization: Bearer $P"
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "That conversation was not found."
+  }
+}
+
+HTTP 404
+
+### 16. Student B deletes student A's conversation (must be 404)
+$ curl -s -X DELETE $B/student/ai/conversations/4 -H "Authorization: Bearer $P"
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "That conversation was not found."
+  }
+}
+
+HTTP 404
+
+=== GUARDRAILS ===
+
+### 17. Message over the length limit is rejected
+$ curl -s -X POST $B/student/ai/chat -d '{"message":"<4100 characters>"}'
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "fields": {
+      "message": "Must be at most 4000 characters."
+    },
+    "message": "Invalid field value."
+  }
+}
+
+HTTP 422
+
+### 18. Quiz with no provider key — structured 503, not a 500
+$ curl -s -X POST $B/student/ai/quiz -d '{"course_id":1,"count":3}'
+{
+  "error": {
+    "ai_configured": false,
+    "code": "AI_NOT_CONFIGURED",
+    "message": "The AI provider is not configured on this server. Set OPENAI_API_KEY or GEMINI_API_KEY in the backend environment to enable generated answers."
+  }
+}
+
+HTTP 503
+
+### 19. Flashcards with no provider key — structured 503
+$ curl -s -X POST $B/student/ai/flashcards -d '{"course_id":1,"count":4}'
+{
+  "error": {
+    "ai_configured": false,
+    "code": "AI_NOT_CONFIGURED",
+    "message": "The AI provider is not configured on this server. Set OPENAI_API_KEY or GEMINI_API_KEY in the backend environment to enable generated answers."
+  }
+}
+
+HTTP 503
+
+### 20. Course the caller is not enrolled in is rejected
+$ curl -s -X POST $B/student/ai/chat -d '{"message":"hello","course_id":3}'
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "Enroll in this course before accessing its syllabus."
+  }
+}
+
+HTTP 403
+
+### 21. Unauthenticated chat call
+$ curl -s -X POST $B/student/ai/chat -d '{"message":"hello"}'
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Authentication is required. Send an Authorization: Bearer <token> header."
+  }
+}
+
+HTTP 401
+
+### 22. Rename the conversation
+$ curl -s -X PATCH $B/student/ai/conversations/4 -d '{"title":"Basic structure revision"}'
+{
+  "conversation": {
+    "course_id": 1,
+    "course_title": "UPSC Civil Services \u2014 Prelims",
+    "created_at": "2026-10-24T16:56:33.777152",
+    "id": 4,
+    "last_message_at": null,
+    "message_count": 4,
+    "title": "Basic structure revision",
+    "topic_id": null,
+    "topic_title": null,
+    "updated_at": "2026-10-24T16:56:35.013664"
+  }
+}
+
+HTTP 200
+
+### 23. Upload a PDF and confirm PDF text extraction produces chunks
+wrote /tmp/history-notes.pdf 1022 bytes
+$ curl -s -X POST $B/student/ai/documents -F file=@/tmp/history-notes.pdf -F 'title=Modern history revision sheet'
+{
+  "document": {
+    "chunk_count": 1,
+    "course_id": null,
+    "course_title": null,
+    "created_at": "2026-10-24T16:56:35.205346",
+    "file_size_bytes": 1022,
+    "indexed": true,
+    "is_own_upload": true,
+    "mime_type": "application/pdf",
+    "resource_id": 13,
+    "resource_type": "pdf",
+    "title": "Modern history revision sheet",
+    "topic_id": null,
+    "visibility": "private"
+  },
+  "index": {
+    "chars": 322,
+    "chunks": 1,
+    "pages": 1,
+    "reindexed": false,
+    "resource_id": 13
+  }
+}
+
+### 23b. Retrieve from the PDF (page-level citation)
+$ curl -s -X POST $B/student/ai/retrieve -d '{"question":"When was the Quit India Movement launched?","top_k":2}'
+{
+  "chunks": [
+    {
+      "chunk_index": 0,
+      "matched_terms": 4,
+      "page_number": 1,
+      "resource_id": 13,
+      "score": 0.4846,
+      "snippet": "Modern History - Revision Sheet\nThe Non-Cooperation Movement was launched by Mahatma Gandhi in 1920.\nIt was withdrawn in February 1922 after the Chauri Chaura incident.\nThe Civil Disobedience Movement began with the Dandi Salt March in March 1930.\nThe Quit India Movement was launched in August 1942 at the Bombay session.",
+      "title": "Modern history revision sheet"
+    }
+  ],
+  "question": "When was the Quit India Movement launched?",
+  "retrieval": {
+    "candidate_chunks": 3,
+    "matched_chunks": 1,
+    "method": "tfidf_cosine",
+    "query_terms": [
+      "india",
+      "launched",
+      "movement",
+      "quit"
+    ],
+    "searched_resource_ids": [
+      12,
+      13
+    ],
+    "top_k": 2
+  }
+}
+
+HTTP 200
+
+### 24. Re-index is idempotent (no duplicate chunks)
+$ curl -s -X POST $B/student/ai/documents -d '{"resource_id":'12'}'
+{
+  "document": {
+    "chunk_count": 2,
+    "course_id": 1,
+    "course_title": "UPSC Civil Services \u2014 Prelims",
+    "created_at": "2026-10-24T16:56:33.934937",
+    "file_size_bytes": 1325,
+    "indexed": true,
+    "is_own_upload": true,
+    "mime_type": "text/plain",
+    "resource_id": 12,
+    "resource_type": "note",
+    "title": "Polity revision notes",
+    "topic_id": null,
+    "visibility": "private"
+  },
+  "index": {
+    "chars": null,
+    "chunks": 2,
+    "pages": null,
+    "reindexed": false,
+    "resource_id": 12
+  }
+}
+
+HTTP 200
+$ curl -s -X POST $B/student/ai/documents -d '{"resource_id":'12',"force":true}'
+{
+  "document": {
+    "chunk_count": 2,
+    "course_id": 1,
+    "course_title": "UPSC Civil Services \u2014 Prelims",
+    "created_at": "2026-10-24T16:56:33.934937",
+    "file_size_bytes": 1325,
+    "indexed": true,
+    "is_own_upload": true,
+    "mime_type": "text/plain",
+    "resource_id": 12,
+    "resource_type": "note",
+    "title": "Polity revision notes",
+    "topic_id": null,
+    "visibility": "private"
+  },
+  "index": {
+    "chars": 1473,
+    "chunks": 2,
+    "pages": 1,
+    "reindexed": true,
+    "resource_id": 12
+  }
+}
+
+HTTP 200
+
+### 25. Delete the conversation (cascade removes its messages)
+$ curl -s -X DELETE $B/student/ai/conversations/4 -H "Authorization: Bearer $A"
+
+HTTP 204
+$ curl -s $B/student/ai/conversations/4 -H "Authorization: Bearer $A"
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "That conversation was not found."
+  }
+}
+
+HTTP 404
+
+### 26. No API key appears in any AI response body
+$ curl -s $B/student/ai/status -H "Authorization: Bearer $A" | grep -iE 'key|secret|sk-' || echo 'no key material in the status payload'
+no key material in the status payload
+```
+
+### Provider failure path (dummy key, proves the outbound call is real)
+
+```bash
+cd "/home/abhi/Apps/Study planner/backend"
+pkill -f run.py
+OPENAI_API_KEY="sk-dummy-not-a-real-key-for-error-path-test" AI_TIMEOUT_SECONDS=10 \
+  nohup .venv/bin/python run.py > /tmp/flask_key.log 2>&1 &
+```
+
+```
+### status with a key present
+$ curl -s $B/student/ai/status -H "Authorization: Bearer $A"
+{
+  "ai_configured": true,
+  "capabilities": {
+    "chat": true,
+    "document_retrieval": true,
+    "flashcards": true,
+    "generated_answers": true,
+    "quiz": true
+  },
+  "disclaimer": "AI answers may contain errors. Check anything important against your course material.",
+  "limits": {
+    "max_message_chars": 4000,
+    "rate_limit": "20 per hour",
+    "retrieval_top_k": 4,
+    "timeout_seconds": 10
+  },
+  "message": "AI generation is available.",
+  "mode": "live",
+  "model": "gpt-4o-mini",
+  "provider": "openai"
+}
+
+HTTP 200
+
+### chat with an invalid key — must be a clean JSON 503, never a 500
+$ curl -s -X POST $B/student/ai/chat -H "Authorization: Bearer $A" -d '{"message":"Which case established the basic structure doctrine?"}'
+{
+  "error": {
+    "ai_configured": true,
+    "code": "AI_AUTH_FAILED",
+    "conversation_id": 6,
+    "message": "The AI provider rejected the server credentials."
+  }
+}
+
+HTTP 503
+
+$ grep -nEi "traceback|\" 500 " /tmp/flask_key.log
+(no tracebacks, no 500s)
+```
+
+The request reached `api.openai.com` and came back HTTP 401, which the provider
+module mapped to a 503 `AI_AUTH_FAILED`. That confirms the outbound integration
+is wired end to end; only a valid key is missing.
+
+**No live completion was exercised: no `OPENAI_API_KEY` or `GEMINI_API_KEY` is
+configured in this environment, so no real model response could be produced.**
+Everything else in the AI path — conversation persistence, document indexing,
+retrieval, citations, permission filtering, rate limiting and error mapping —
+runs without a key and is evidenced above.
+
+### Per-user rate limiting
+
+```bash
+cd "/home/abhi/Apps/Study planner/backend"
+AI_RATE_LIMIT="3 per minute" nohup .venv/bin/python run.py > /tmp/flask_rl.log 2>&1 &
+```
+
+```
+### four chat calls as student A
+call 1 -> HTTP 200
+call 2 -> HTTP 200
+call 3 -> HTTP 200
+call 4 -> HTTP 429
+
+### body of the 4th (limited) call
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Too many requests. The limit for this endpoint is 3 per 1 minute. Wait a moment and try again."
+  }
+}
+
+### student B is unaffected (separate per-user bucket)
+HTTP 200
+```
+
+### Server log after the full run
+
+```bash
+$ grep -nEi "traceback|\" 500 |Unhandled application error" /tmp/flask.log
+(none)
+
+$ grep -oE '" [0-9]{3} -' /tmp/flask.log | sort | uniq -c
+     19 " 200 -
+      3 " 201 -
+      1 " 204 -
+      1 " 401 -
+      1 " 403 -
+      5 " 404 -
+      1 " 422 -
+      2 " 503 -
+```
+
+Every non-2xx status in that tally is an intentional negative check from the
+script: 401 unauthenticated, 403 not enrolled, 404 × 5 cross-student access,
+422 over-length message, 503 × 2 quiz and flashcards with no key.
+
+### Summary of the AI checks
+
+| Check | Result |
+|---|---|
+| Status endpoint with no key | 200, `ai_configured: false`, `provider: "offline"`, human message (step 1) |
+| Status endpoint on the short `/api/v1/ai` prefix | identical payload (step 1b) |
+| Create / list / rename / delete conversation | 201 / 200 / 200 / 204, delete cascades its messages (steps 2, 3, 22, 25) |
+| Chat with no key | **200** with `code: "AI_NOT_CONFIGURED"`, notice, persisted assistant message (steps 4, 8) |
+| Upload + index a text document | 201, 2 chunks created and visible in `document_chunks` (steps 5, 6, 6b) |
+| Upload + index a PDF | 201, 1 chunk with `page_number: 1` extracted by `pypdf` (steps 23, 23b) |
+| Retrieval returns ranked chunks | 200, different questions rank different chunks with real TF-IDF scores (steps 7, 7b) |
+| Chat cites the retrieved chunk | assistant message carries `sources: [{resource_id, title, page_number, chunk_index, score, snippet}]` (step 8) |
+| Paginated message history | 200, `per_page=2` over 4 messages → `pages: 2` (step 9) |
+| **Student B indexing student A's private document** | **404 `NOT_FOUND`** (step 10) |
+| **Student B retrieval restricted to that resource id** | **200 with zero chunks, `candidate_chunks: 0`** (step 11) |
+| **Student B unrestricted retrieval** | **zero chunks — A's upload is invisible** (step 12) |
+| **Student B chat about the same question** | **no citation from A's document** (step 13) |
+| **Student B downloading the file** | **404 `NOT_FOUND`** (step 14) |
+| Cross-student conversation read / delete | 404 both (steps 15, 16) |
+| Over-length message | 422 `VALIDATION_ERROR` (step 17) |
+| Quiz / flashcards with no key | 503 `AI_NOT_CONFIGURED` with the machine-readable flag (steps 18, 19) |
+| Chat scoped to an un-enrolled course | 403 `FORBIDDEN` (step 20) |
+| Unauthenticated chat | 401 `UNAUTHORIZED` (step 21) |
+| Re-index idempotency | second call reports `reindexed: false` and the same chunk count; `force: true` rebuilds to the same 2 chunks, no duplicates (step 24) |
+| API key never leaked | no key-like field in any AI response body (step 26) |
+| Server log | no traceback, no exception, no 500 across the whole run |

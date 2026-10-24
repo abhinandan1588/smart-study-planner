@@ -35,6 +35,25 @@ def _csv(name, default):
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _ai_provider():
+    """Resolve the AI provider from the environment.
+
+    An explicit `AI_PROVIDER` wins. Otherwise the provider is inferred from
+    whichever key variable is present, and falls back to `offline` when no key
+    is configured at all so the assistant degrades instead of failing.
+    """
+    explicit = (os.environ.get("AI_PROVIDER") or "").strip().lower()
+    if explicit in {"openai", "gemini", "offline"}:
+        return explicit
+    if os.environ.get("OPENAI_API_KEY"):
+        return "openai"
+    if os.environ.get("GEMINI_API_KEY"):
+        return "gemini"
+    if os.environ.get("AI_API_KEY"):
+        return "openai"
+    return "offline"
+
+
 class BaseConfig:
     # --- Flask core -------------------------------------------------------
     SECRET_KEY = os.environ.get(
@@ -86,15 +105,26 @@ class BaseConfig:
     }
 
     # --- AI provider (server side only) -----------------------------------
-    AI_PROVIDER = os.environ.get("AI_PROVIDER", "offline")
-    AI_MODEL = os.environ.get("AI_MODEL", "gpt-4o-mini")
+    # The key is read from the environment and never leaves the server: it is
+    # not serialised into any API response and never reaches the frontend.
     AI_API_KEY = (
         os.environ.get("AI_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
         or os.environ.get("GEMINI_API_KEY")
         or ""
     )
+    AI_PROVIDER = _ai_provider()
+    AI_MODEL = os.environ.get("AI_MODEL", "").strip()
     AI_RATE_LIMIT = os.environ.get("AI_RATE_LIMIT", "20 per hour")
+    AI_TIMEOUT_SECONDS = _int("AI_TIMEOUT_SECONDS", 30)
+    AI_MAX_MESSAGE_CHARS = _int("AI_MAX_MESSAGE_CHARS", 4000)
+    AI_MAX_HISTORY_MESSAGES = _int("AI_MAX_HISTORY_MESSAGES", 10)
+    AI_RETRIEVAL_TOP_K = _int("AI_RETRIEVAL_TOP_K", 4)
+    AI_MAX_OUTPUT_TOKENS = _int("AI_MAX_OUTPUT_TOKENS", 900)
+    AI_DISCLAIMER = (
+        "AI answers may contain errors. Check anything important against your "
+        "course material."
+    )
 
     # --- Auth behaviour ---------------------------------------------------
     PASSWORD_MIN_LENGTH = 8

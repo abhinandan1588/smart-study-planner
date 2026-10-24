@@ -14,6 +14,11 @@ Access rules enforced on every request:
 
 from flask import current_app, jsonify, request, send_file
 
+from app.common.access import (
+    can_access_resource,
+    enrolled_course_ids,
+    resource_visibility_filter,
+)
 from app.common.decorators import current_user, student_required
 from app.common.errors import ForbiddenError, NotFoundError, ValidationError
 from app.common.pagination import paginate
@@ -31,10 +36,8 @@ from app.common.validators import (
 from app.extensions import db
 from app.models import (
     RESOURCE_TYPES,
-    Enrollment,
     Resource,
     ResourceBookmark,
-    ResourcePermission,
     utcnow,
 )
 from app.models.resource import new_access_token
@@ -52,75 +55,12 @@ RECENT_LIMIT = 10
 
 
 # --- access control -----------------------------------------------------
+# The visibility rules live in `app.common.access` so the AI retrieval path
+# applies exactly the same checks as the download path.
 
-
-def _enrolled_course_ids(user_id):
-    return [
-        row[0]
-        for row in db.session.query(Enrollment.course_id)
-        .filter(Enrollment.user_id == user_id, Enrollment.status != "dropped")
-        .all()
-    ]
-
-
-def _visibility_filter(user_id, course_ids):
-    conditions = [Resource.owner_id == user_id]
-
-    shared = db.and_(
-        Resource.owner_id.is_(None),
-        Resource.status == "published",
-    )
-    conditions.append(db.and_(shared, Resource.visibility == "public"))
-    if course_ids:
-        conditions.append(
-            db.and_(
-                shared,
-                Resource.visibility == "enrolled_only",
-                Resource.course_id.in_(course_ids),
-            )
-        )
-
-    permission_targets = [ResourcePermission.user_id == user_id]
-    if course_ids:
-        permission_targets.append(ResourcePermission.course_id.in_(course_ids))
-    granted = db.session.query(ResourcePermission.resource_id).filter(
-        db.or_(*permission_targets)
-    )
-    conditions.append(Resource.id.in_(granted))
-
-    return db.or_(*conditions)
-
-
-def can_access(resource, user):
-    """True when this caller may read the resource."""
-    if resource is None:
-        return False
-    if resource.owner_id == user.id:
-        return True
-    if resource.owner_id is not None:
-        # Another student's private upload.
-        return False
-    if resource.status != "published":
-        return False
-    if resource.visibility == "public":
-        return True
-
-    course_ids = _enrolled_course_ids(user.id)
-    if resource.visibility == "enrolled_only" and resource.course_id in course_ids:
-        return True
-
-    permission = ResourcePermission.query.filter(
-        ResourcePermission.resource_id == resource.id,
-        db.or_(
-            ResourcePermission.user_id == user.id,
-            (
-                ResourcePermission.course_id.in_(course_ids)
-                if course_ids
-                else db.false()
-            ),
-        ),
-    ).first()
-    return permission is not None
+_enrolled_course_ids = enrolled_course_ids
+_visibility_filter = resource_visibility_filter
+can_access = can_access_resource
 
 
 def _authorised_resource(resource_id, user):

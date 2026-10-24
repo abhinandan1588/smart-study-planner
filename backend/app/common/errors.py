@@ -100,6 +100,11 @@ def register_error_handlers(app):
         if status == 413:
             limit_mb = app.config.get("MAX_UPLOAD_MB", 20)
             message = f"The uploaded file exceeds the {limit_mb} MB limit."
+        elif status == 429:
+            message = (
+                f"Too many requests. The limit for this endpoint is {message}. "
+                "Wait a moment and try again."
+            )
         return jsonify({"error": {"code": code, "message": message}}), status
 
     @app.errorhandler(IntegrityError)
