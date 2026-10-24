@@ -134,6 +134,9 @@ class BaseConfig:
     # logged server side and returned by the API in development.
     EXPOSE_DEV_TOKENS = _bool("EXPOSE_DEV_TOKENS", True)
     REQUIRE_EMAIL_VERIFICATION = _bool("REQUIRE_EMAIL_VERIFICATION", False)
+    # The seeded demo accounts live on `@studyplanner.test`. Allow special-use
+    # domains so registration accepts the same domain the demo data ships on.
+    ALLOW_SPECIAL_USE_EMAIL_DOMAINS = _bool("ALLOW_SPECIAL_USE_EMAIL_DOMAINS", True)
 
     # --- Rate limiting ----------------------------------------------------
     RATELIMIT_STORAGE_URI = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
@@ -165,6 +168,9 @@ class ProductionConfig(BaseConfig):
     ENV_NAME = "production"
     EXPOSE_DEV_TOKENS = _bool("EXPOSE_DEV_TOKENS", False)
     REQUIRE_EMAIL_VERIFICATION = _bool("REQUIRE_EMAIL_VERIFICATION", True)
+    ALLOW_SPECIAL_USE_EMAIL_DOMAINS = _bool(
+        "ALLOW_SPECIAL_USE_EMAIL_DOMAINS", False
+    )
     JWT_COOKIE_SECURE = True
 
 

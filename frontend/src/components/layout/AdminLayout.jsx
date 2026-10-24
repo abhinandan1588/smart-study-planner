@@ -8,13 +8,26 @@ import UserMenu from './UserMenu';
 import { ADMIN_NAV } from '../../utils/constants';
 import './Shell.css';
 
+/**
+ * Admin routes that are not top-level nav destinations still need a readable
+ * crumb, otherwise the fallback renders the raw path (`#admin/audit-logs`).
+ */
+const EXTRA_CRUMB_LABELS = {
+  '/admin/audit-logs': 'Audit Logs',
+};
+
 function crumbsFor(pathname) {
+  const crumbs = [{ label: 'Admin', to: '/admin/dashboard' }];
+  const known = EXTRA_CRUMB_LABELS[pathname];
+  if (known) {
+    crumbs.push({ label: known });
+    return crumbs;
+  }
   const match = [...ADMIN_NAV]
     .sort((a, b) => b.to.length - a.to.length)
     .find((item) => pathname === item.to || pathname.startsWith(`${item.to}/`));
-  const crumbs = [{ label: 'Admin', to: '/admin/dashboard' }];
   if (match) crumbs.push({ label: match.label, to: match.to });
-  const tail = pathname.replace(match?.to || '', '').replace(/^\//, '');
+  const tail = match ? pathname.replace(match.to, '').replace(/^\//, '') : '';
   if (tail) crumbs.push({ label: tail.split('/')[0] === 'new' ? 'New' : `#${tail}` });
   return crumbs;
 }
@@ -105,6 +118,12 @@ export default function AdminLayout() {
             aria-controls="sp-admin-sidebar"
             onClick={() => setDrawerOpen(true)}
           />
+
+          {/* The admin shell shows breadcrumbs rather than a visible page
+              title, so the document's h1 is exposed to assistive technology
+              only. Without it every admin page would start its heading
+              hierarchy at h2 (PRD 9). */}
+          <h1 className="sp-visually-hidden">{current}</h1>
 
           <nav className="sp-shell__crumbs" aria-label="Breadcrumb">
             <ol>

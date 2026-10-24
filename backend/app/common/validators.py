@@ -74,10 +74,22 @@ def clean_str(value, field, max_length=None, min_length=1, required=True, defaul
 
 
 def validate_email_address(raw, field="email"):
-    """Normalise and validate an email address."""
+    """Normalise and validate an email address.
+
+    Outside production, special-use domains (`.test`, `.local`, `.example`)
+    are accepted so accounts can be created on the same domain as the seeded
+    demo data. Production keeps the strict default.
+    """
     value = clean_str(raw, field, max_length=255)
+    allow_special_use = current_app.config.get(
+        "ALLOW_SPECIAL_USE_EMAIL_DOMAINS", False
+    )
     try:
-        result = _validate_email(value, check_deliverability=False)
+        result = _validate_email(
+            value,
+            check_deliverability=False,
+            test_environment=allow_special_use,
+        )
     except EmailNotValidError as exc:
         raise ValidationError(
             "Invalid email address.", fields={field: str(exc)}
