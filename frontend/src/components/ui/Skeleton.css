@@ -1,0 +1,66 @@
+.sp-skeleton-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 100%;
+}
+
+.sp-skeleton {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--c-surface-alt) 25%,
+    #e8ebf1 37%,
+    var(--c-surface-alt) 63%
+  );
+  background-size: 400% 100%;
+  animation: sp-shimmer 1.3s ease-in-out infinite;
+  border-radius: var(--r-sm);
+}
+
+.sp-skeleton--text {
+  height: 12px;
+  width: 100%;
+}
+
+.sp-skeleton--block {
+  height: 96px;
+  width: 100%;
+  border-radius: var(--r-md);
+}
+
+.sp-skeleton--circle {
+  height: 36px;
+  width: 36px;
+  border-radius: var(--r-full);
+}
+
+.sp-skeleton--row {
+  height: 44px;
+  width: 100%;
+  border-radius: var(--r-md);
+}
+
+.sp-skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+}
+
+.sp-skeleton-row td {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border);
+}
+
+@keyframes sp-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}

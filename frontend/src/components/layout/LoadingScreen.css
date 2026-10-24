@@ -1,0 +1,15 @@
+.sp-loading {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: var(--sp-10);
+  background: var(--c-bg);
+}
+
+.sp-loading__text {
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+}

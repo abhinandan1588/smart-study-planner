@@ -5938,3 +5938,257 @@ script: 401 unauthenticated, 403 not enrolled, 404 × 5 cross-student access,
 | Re-index idempotency | second call reports `reindexed: false` and the same chunk count; `force: true` rebuilds to the same 2 chunks, no duplicates (step 24) |
 | API key never leaked | no key-like field in any AI response body (step 26) |
 | Server log | no traceback, no exception, no 500 across the whole run |
+
+## frontend-shell
+
+Phase 5 of the plan: the React scaffold, design system, API client, auth flow,
+shared UI kit, the two application shells and the complete router. Plain
+JavaScript (`.jsx`), Vite 7, React Router 7, axios; Recharts is installed for
+the chart work in the next step. **Styling: plain CSS with design tokens** -
+`src/styles/tokens.css` + `src/styles/global.css` plus one co-located `.css`
+file per component, class names `sp-<block>__<element>`. No Tailwind, no
+CSS-in-JS.
+
+### What was built
+
+```
+frontend/package.json          pinned deps (react 19.3.1, react-router-dom 7.18.4,
+                               axios 1.20.0, recharts 3.10.1, vite 7.3.7)
+frontend/vite.config.js        /api -> http://127.0.0.1:5000 proxy (dev + preview)
+frontend/index.html            SPA shell, Inter webfont, favicon
+src/main.jsx                   React root, imports tokens.css + global.css
+src/App.jsx                    re-export of src/app/App.jsx (keeps the PRD 6.3 layout)
+src/app/App.jsx                ErrorBoundary > ToastProvider > BrowserRouter > AuthProvider
+src/app/router.jsx             every student + admin route, guarded, plus NotFound
+src/app/guards.jsx             RequireAuth, RequireRole, RedirectIfAuthenticated,
+                               RoleHomeRedirect
+src/context/AuthContext.jsx    login/register/logout/refresh, bootstrap-from-storage,
+                               server-verified role from GET /auth/me
+src/services/api.js            axios baseURL /api/v1, bearer attachment, single-flight
+                               refresh-on-401 + retry, logout on refresh failure,
+                               ApiError normaliser reading the backend error envelope
+src/services/*Api.js           13 per-domain modules: auth, student, courses, syllabus,
+                               timetable, tasks, focus, goals, analytics, materials,
+                               notifications, admin, ai
+src/components/ui/*            Button, IconButton, Input, Select, Textarea, Checkbox,
+                               Radio, DateInput, Field, Card, MetricTile, Badge, Tabs,
+                               Dialog, ConfirmDialog, Drawer, DataTable, Pagination,
+                               Skeleton, EmptyState, ErrorState, ToastProvider,
+                               ProgressBar, ProgressRing, Avatar, Dropdown, Tooltip,
+                               Spinner, Icon (inline SVG set, no icon dependency)
+src/components/layout/*        StudentLayout, AdminLayout, AuthLayout, SidebarNav,
+                               UserMenu, Logo, LoadingScreen
+src/hooks/*                    useApi/useMutation, useAuth, useToast, useDebounce,
+                               usePagination, useFocusTimer, useMediaQuery
+src/utils/*                    date, format, constants (nav + enum labels + statusTone),
+                               validation, storage
+src/features/auth/pages/*      Login, Register, VerifyEmail, ForgotPassword,
+                               ResetPassword - all wired to the real endpoints and
+                               surfacing the dev verification / reset tokens
+```
+
+78 `.jsx`, 29 `.js`, 24 `.css` files. The 14 student pages and 11 admin pages are
+registered placeholders in this step; the next two steps replace them.
+
+No AI provider key appears anywhere under `frontend/`: `src/services/aiApi.js`
+only calls `/student/ai/*` and the key stays in the backend environment.
+
+### 1. Install and production build
+
+```
+$ cd "/home/abhi/Apps/Study planner/frontend"
+$ npm install
+added 133 packages, and audited 134 packages in 24s
+found 0 vulnerabilities
+
+$ npm run build
+> smart-study-planner-frontend@1.0.0 build
+> vite build
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 182 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.97 kB │ gzip:   0.51 kB
+dist/assets/index-CdPV6lih.css   33.16 kB │ gzip:   6.19 kB
+dist/assets/index-Dzymy02Y.js   374.98 kB │ gzip: 121.21 kB
+✓ built in 2.02s
+```
+
+Zero errors, zero warnings.
+
+### 2. Both servers started in the background
+
+```
+$ cd "/home/abhi/Apps/Study planner/backend" && setsid nohup .venv/bin/python \
+    -m flask --app run.py run </dev/null >/tmp/flask.log 2>&1 &
+$ cd "/home/abhi/Apps/Study planner/frontend" && setsid nohup npm run dev \
+    </dev/null >/tmp/vite.log 2>&1 &
+
+$ ss -ltn | grep -E '5000|5173'
+LISTEN 0 128 127.0.0.1:5000 0.0.0.0:*
+LISTEN 0 511 127.0.0.1:5173 0.0.0.0:*
+
+$ tail -6 /tmp/flask.log
+2026-10-24 23:18:37 INFO app: Smart Study Planner API ready (env=development,
+  db=sqlite:////home/abhi/Apps/Study planner/backend/instance/app.db)
+ * Running on http://127.0.0.1:5000
+
+$ tail -5 /tmp/vite.log
+  VITE v7.3.7  ready in 175 ms
+  ➜  Local:   http://localhost:5173/
+```
+
+### 3. Vite serves index.html and the /api proxy reaches Flask
+
+```
+$ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/
+200   (text/html, body contains /@vite/client and /src/main.jsx)
+
+$ curl -s http://127.0.0.1:5173/api/v1/health
+{"db":"ok","service":"smart-study-planner-api","status":"ok","version":"v1"}
+HTTP 200
+
+$ curl -s http://127.0.0.1:5173/api/v1/student/dashboard
+{"error":{"code":"UNAUTHORIZED","message":"Authentication is required. Send an
+  Authorization: Bearer <token> header."}}
+HTTP 401
+
+$ for p in /login /register /verify-email /app/dashboard /admin/dashboard /nope
+/login 200  /register 200  /verify-email 200
+/app/dashboard 200  /admin/dashboard 200  /nope 200    (SPA fallback works)
+```
+
+### 4. Auth flow verified end to end through the Vite proxy
+
+Every call below targets `http://127.0.0.1:5173/api/v1/...`, so each one
+traverses the Vite proxy into Flask:
+
+```
+== 1. POST /auth/login (student) through the Vite proxy ==
+{"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc5Mjg2NDMyMCwianRpIjoiYTU1NWI5ODItNDIwZS00MmFiLTlkY2ItNzhmNThkNzRmNTdkIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjIiLCJuYmYiOjE3OTI4NjQzMjAsImNzcmYiOiJiMTg1NjNmNC04MGZiLTRlNjEtYmRlZC04ZjZiZmUyNjA5Y2UiLCJleHAiOjE3OTI4Njc5MjAsInJvbGUiOiJzdHVkZW50Iiwic3RhdHVzIjoiYWN0aXZlIiwiZW1haWwiOiJhYXJhdkBzdHVkeXBsYW5uZXIudGVzdCJ9.TJp_-cQ_k3OtqXmKLzSEeVjdo-Mi3
+
+== 2. GET /auth/me with the access token (server-verified role) ==
+{'id': 2, 'full_name': 'Aarav Sharma', 'email': 'aarav@studyplanner.test', 'role': 'student', 'status': 'active', 'email_verified': True}
+
+== 3. GET /student/dashboard (the student landing redirect target) ==
+HTTP 200
+['active_goals', 'announcements', 'continue_topic', 'date', 'enrolled_courses', 'focus_minutes_today', 'greeting', 'recent_courses', 'server_time', 'streak', 'streak_days', 'syllabus', 'syllabus_completion_percent', 'tasks', 'timezone', 'today', 'unread_notifications', 'upcoming_deadlines', 'upcoming_sessions', 'week']
+
+== 4. POST /auth/refresh with the refresh token (the 401 retry path) ==
+access_token issued: True | role: student
+
+== 5. Student token rejected on an admin route (RequireRole has a server backstop) ==
+GET /admin/dashboard as student -> HTTP 403
+
+== 6. POST /auth/login (admin) + admin dashboard ==
+role: admin
+GET /admin/dashboard as admin -> HTTP 200
+
+== 7. Bad credentials (the error normaliser reads this envelope) ==
+{"error":{"code":"INVALID_CREDENTIALS","message":"The email address or password is incorrect."}}
+
+
+== 8. Registration + the dev verification token the UI displays ==
+status: pending_verification | role: student | verification_token present: True
+
+== 9. POST /auth/verify-email with that token ==
+Email address verified. Your account is now active. | status: active
+
+== 10. POST /auth/forgot-password → dev reset token → POST /auth/reset-password ==
+reset_token present: yes
+{"message":"Password updated. You can now sign in."}
+
+login with the new password -> HTTP 200
+
+== 11. POST /auth/logout then reuse of the revoked token ==
+{"message":"Signed out. The token has been revoked."}
+
+GET /auth/me with the revoked token -> HTTP 401
+
+== 12. Built production bundle served by vite preview is not needed; dist exists ==
+/home/abhi/Apps/Study planner/frontend/dist:
+assets
+favicon.svg
+index.html
+
+/home/abhi/Apps/Study planner/frontend/dist/assets:
+index-CdPV6lih.css
+index-VlosDZ9d.js
+```
+
+### 5. Real UI login in headless Chrome
+
+Headless Chrome is installed on this machine (`/usr/bin/google-chrome`), so the
+login flow was driven through the actual form rather than only with curl.
+puppeteer-core was installed in `/tmp/ssp-browser` only - it is **not** a project
+dependency. Screenshots: `/tmp/ssp-shots/01-login.png`,
+`02-student-landing.png`, `03-student-mobile.png`, `04-admin-landing.png`,
+`05-login-error.png`.
+
+```
+== 1. GET /login ==
+title: Smart Study Planner
+heading: Sign in
+
+== 2. Sign in as aarav@studyplanner.test through the form ==
+redirected to: /app/dashboard
+sidebar nav items: 11
+nav labels: Dashboard | My Courses | My Syllabus | Timetable & Tasks | Focus Timer | Goals & Achievements | Progress Analytics | AI Study Assistant | Study Materials | Notifications | Profile & Settings
+page title: Dashboard · Smart Study Planner
+
+== 3. Navigate to /app/planner/tasks and /app/settings ==
+tasks heading: Tasks
+settings heading: Profile & Settings
+
+== 4. A student opening /admin/dashboard ==
+guard sent the student to: /app/dashboard
+
+== 5. Mobile viewport (390x844) bottom nav ==
+bottom nav visible: flex
+
+== 6. Sign in as admin@studyplanner.test ==
+redirected to: /admin/dashboard
+admin nav items: 9
+admin nav labels: Dashboard | Student Management | Course Management | Subject Management | Syllabus Management | Study Material Management | Announcements & Notifications | Reports & Analytics | Profile & Settings
+page title: Dashboard · Admin · Smart Study Planner
+
+== 7. An admin opening /app/dashboard ==
+guard sent the admin to: /admin/dashboard
+
+== 8. Invalid credentials ==
+error shown: The email address or password is incorrect.
+
+== 9. Unknown route ==
+404 heading: Page not found
+
+== Console / error report ==
+total console messages: 28
+warnings/errors: 1
+   [error] Failed to load resource: the server responded with a status of 401 (UNAUTHORIZED)
+uncaught page errors: 0
+failed requests: 0
+```
+
+The single console error is the expected 401 from the deliberate bad-credentials
+step. No React warnings, no uncaught page errors, no failed requests.
+
+### Verification summary
+
+| Check | Result |
+|---|---|
+| `npm install` | 133 packages, 0 vulnerabilities |
+| `npm run build` | 182 modules transformed, 0 errors, `dist/` written |
+| Vite serves `index.html` | HTTP 200 on `/` and on every SPA deep link |
+| `/api` proxy to Flask | `/api/v1/health` returns 200 `{"db":"ok"}` through port 5173 |
+| Student login + redirect | form login lands on `/app/dashboard`, 11 nav items present |
+| Admin login + redirect | form login lands on `/admin/dashboard`, 9 nav items present |
+| Role guard (student) | `/admin/dashboard` bounces to `/app/dashboard`; API also answers 403 |
+| Role guard (admin) | `/app/dashboard` bounces to `/admin/dashboard` |
+| Refresh-on-401 | `POST /auth/refresh` with the refresh token issues a new access token |
+| Logout | the revoked token returns 401 on the next `/auth/me` |
+| Register -> verify | 201 `pending_verification` + dev token -> verified -> `active` |
+| Forgot -> reset | dev reset token -> password updated -> login 200 with the new password |
+| Error rendering | backend message "The email address or password is incorrect." shown inline |
+| Mobile | bottom tab bar computes to `display: flex` at 390x844 |
+| Flask log | 0 tracebacks across the whole run |

@@ -1,0 +1,114 @@
+.sp-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.sp-progress__labelrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+}
+
+.sp-progress__label {
+  color: var(--c-text-muted);
+}
+
+.sp-progress__value {
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-progress__track {
+  width: 100%;
+  background: var(--c-surface-alt);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+
+.sp-progress__track--sm {
+  height: 5px;
+}
+
+.sp-progress__track--md {
+  height: 8px;
+}
+
+.sp-progress__track--lg {
+  height: 12px;
+}
+
+.sp-progress__fill {
+  height: 100%;
+  border-radius: var(--r-full);
+  transition: width var(--t-base);
+}
+
+.sp-progress__fill--primary {
+  background: var(--c-primary);
+}
+.sp-progress__fill--success {
+  background: var(--c-success);
+}
+.sp-progress__fill--warning {
+  background: #d97706;
+}
+.sp-progress__fill--danger {
+  background: var(--c-danger);
+}
+
+/* --- Ring --------------------------------------------------------------- */
+
+.sp-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sp-ring__track {
+  stroke: var(--c-surface-alt);
+}
+
+.sp-ring__fill {
+  transition: stroke-dashoffset var(--t-base);
+}
+
+.sp-ring__fill--primary {
+  stroke: var(--c-primary);
+}
+.sp-ring__fill--success {
+  stroke: var(--c-success);
+}
+.sp-ring__fill--warning {
+  stroke: #d97706;
+}
+.sp-ring__fill--danger {
+  stroke: var(--c-danger);
+}
+
+.sp-ring__content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.sp-ring__label {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.sp-ring__caption {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}

@@ -1,0 +1,43 @@
+.sp-tooltip {
+  position: relative;
+  display: inline-flex;
+}
+
+.sp-tooltip__bubble {
+  position: absolute;
+  z-index: var(--z-dialog);
+  max-width: 240px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--c-text);
+  color: var(--c-text-inverse);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-base);
+  white-space: normal;
+  box-shadow: var(--sh-md);
+  pointer-events: none;
+}
+
+.sp-tooltip__bubble--top {
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.sp-tooltip__bubble--bottom {
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.sp-tooltip__bubble--right {
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.sp-tooltip__bubble--left {
+  right: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+}

@@ -1,0 +1,23 @@
+.sp-spinner {
+  display: inline-block;
+  flex: none;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-right-color: transparent;
+  border-radius: var(--r-full);
+  animation: sp-spin 650ms linear infinite;
+}
+
+.sp-spinner--muted {
+  color: var(--c-text-muted);
+}
+
+.sp-spinner--primary {
+  color: var(--c-primary);
+}
+
+@keyframes sp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,112 @@
+.sp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font-weight: var(--fw-medium);
+  font-size: var(--fs-base);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+
+.sp-btn:hover {
+  text-decoration: none;
+}
+
+.sp-btn:focus-visible {
+  box-shadow: var(--ring);
+}
+
+.sp-btn:disabled,
+.sp-btn[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.sp-btn--md {
+  height: 38px;
+  padding: 0 var(--sp-4);
+}
+
+.sp-btn--sm {
+  height: 32px;
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-sm);
+}
+
+.sp-btn--full {
+  width: 100%;
+}
+
+/* --- Variants ---------------------------------------------------------- */
+
+.sp-btn--primary {
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+  color: var(--c-text-inverse);
+}
+
+.sp-btn--primary:hover:not(:disabled) {
+  background: var(--c-primary-hover);
+  border-color: var(--c-primary-hover);
+}
+
+.sp-btn--primary:active:not(:disabled) {
+  background: var(--c-primary-active);
+}
+
+.sp-btn--secondary {
+  background: var(--c-surface);
+  border-color: var(--c-border-strong);
+  color: var(--c-text);
+}
+
+.sp-btn--secondary:hover:not(:disabled) {
+  background: var(--c-surface-hover);
+  border-color: var(--c-text-subtle);
+}
+
+.sp-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--c-text-muted);
+}
+
+.sp-btn--ghost:hover:not(:disabled) {
+  background: var(--c-surface-alt);
+  color: var(--c-text);
+}
+
+.sp-btn--subtle {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary-border);
+  color: var(--c-primary-hover);
+}
+
+.sp-btn--subtle:hover:not(:disabled) {
+  background: #e0ecfe;
+}
+
+.sp-btn--danger {
+  background: var(--c-danger);
+  border-color: var(--c-danger);
+  color: var(--c-text-inverse);
+}
+
+.sp-btn--danger:hover:not(:disabled) {
+  background: var(--c-danger-hover);
+  border-color: var(--c-danger-hover);
+}
+
+.sp-btn--danger:focus-visible {
+  box-shadow: var(--ring-danger);
+}
+
+.sp-btn.is-loading {
+  cursor: progress;
+}

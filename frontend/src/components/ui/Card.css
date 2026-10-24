@@ -1,0 +1,145 @@
+.sp-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-sm);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sp-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.sp-card__heading {
+  min-width: 0;
+}
+
+.sp-card__title {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+
+.sp-card__subtitle {
+  margin-top: 2px;
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+}
+
+.sp-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: none;
+}
+
+.sp-card__body {
+  padding: var(--sp-5);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sp-card__body--flush {
+  padding: 0;
+}
+
+.sp-card__foot {
+  padding: var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--c-border);
+  background: var(--c-surface-alt);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  font-size: var(--fs-sm);
+  color: var(--c-text-muted);
+}
+
+/* --- Metric tile (compact by design, max 110px tall) ------------------- */
+
+.sp-metric {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  max-height: 110px;
+  padding: var(--sp-4);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-sm);
+}
+
+.sp-metric__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  flex: none;
+  background: var(--c-surface-alt);
+  color: var(--c-text-muted);
+}
+
+.sp-metric--primary .sp-metric__icon {
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+}
+
+.sp-metric--success .sp-metric__icon {
+  background: var(--c-success-soft);
+  color: var(--c-success);
+}
+
+.sp-metric--warning .sp-metric__icon {
+  background: var(--c-warning-soft);
+  color: var(--c-warning);
+}
+
+.sp-metric--danger .sp-metric__icon {
+  background: var(--c-danger-soft);
+  color: var(--c-danger);
+}
+
+.sp-metric__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sp-metric__label {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--c-text-muted);
+}
+
+.sp-metric__value {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: -0.01em;
+}
+
+.sp-metric__sub {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+.sp-metric__delta {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+
+.sp-metric__delta--up {
+  color: var(--c-success);
+}
+
+.sp-metric__delta--down {
+  color: var(--c-danger);
+}

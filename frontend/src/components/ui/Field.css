@@ -1,0 +1,221 @@
+.sp-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.sp-field__labelrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.sp-field__label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--c-text);
+}
+
+.sp-field__labelaction {
+  font-size: var(--fs-sm);
+}
+
+.sp-field__required {
+  color: var(--c-danger);
+}
+
+.sp-field__hint,
+.sp-field__error {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-base);
+}
+
+.sp-field__hint {
+  color: var(--c-text-muted);
+}
+
+.sp-field__error {
+  color: var(--c-danger);
+}
+
+/* --- Control surface shared by input / select / textarea --------------- */
+
+.sp-control {
+  width: 100%;
+  min-width: 0;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-md);
+  color: var(--c-text);
+  font-size: var(--fs-base);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.sp-control::placeholder {
+  color: var(--c-text-subtle);
+}
+
+.sp-control:hover:not(:disabled):not(:read-only) {
+  border-color: var(--c-text-subtle);
+}
+
+.sp-control:focus-visible,
+.sp-control:focus {
+  border-color: var(--c-primary);
+  box-shadow: var(--ring);
+  outline: none;
+}
+
+.sp-control:disabled,
+.sp-control[aria-disabled='true'] {
+  background: var(--c-surface-alt);
+  color: var(--c-text-muted);
+  cursor: not-allowed;
+}
+
+.sp-control[aria-invalid='true'] {
+  border-color: var(--c-danger);
+}
+
+.sp-control[aria-invalid='true']:focus {
+  box-shadow: var(--ring-danger);
+}
+
+input.sp-control,
+select.sp-control {
+  height: 38px;
+  padding: 0 var(--sp-3);
+}
+
+input.sp-control--sm,
+select.sp-control--sm {
+  height: 32px;
+  font-size: var(--fs-sm);
+}
+
+textarea.sp-control {
+  padding: var(--sp-3);
+  min-height: 92px;
+  resize: vertical;
+  line-height: var(--lh-base);
+}
+
+/* --- Input with a leading icon / trailing slot ------------------------- */
+
+.sp-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sp-input__icon {
+  position: absolute;
+  left: var(--sp-3);
+  color: var(--c-text-subtle);
+  pointer-events: none;
+}
+
+.sp-input--with-icon .sp-control {
+  padding-left: 38px;
+}
+
+.sp-input__suffix {
+  position: absolute;
+  right: var(--sp-2);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.sp-input--with-suffix .sp-control {
+  padding-right: 42px;
+}
+
+/* --- Select ------------------------------------------------------------ */
+
+.sp-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+select.sp-control {
+  appearance: none;
+  padding-right: 34px;
+  cursor: pointer;
+}
+
+.sp-select__chevron {
+  position: absolute;
+  right: var(--sp-3);
+  color: var(--c-text-muted);
+  pointer-events: none;
+}
+
+/* --- Checkbox / radio -------------------------------------------------- */
+
+.sp-check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  cursor: pointer;
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+}
+
+.sp-check input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--c-primary);
+  cursor: pointer;
+  flex: none;
+}
+
+.sp-check input:focus-visible {
+  box-shadow: var(--ring);
+  border-radius: 4px;
+}
+
+.sp-check input:disabled {
+  cursor: not-allowed;
+}
+
+.sp-check--disabled {
+  color: var(--c-text-muted);
+  cursor: not-allowed;
+}
+
+.sp-check__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sp-check__desc {
+  color: var(--c-text-muted);
+  font-size: var(--fs-xs);
+}
+
+/* --- Field rows -------------------------------------------------------- */
+
+.sp-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.sp-form__row {
+  display: grid;
+  gap: var(--sp-4);
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.sp-form__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding-top: var(--sp-2);
+}

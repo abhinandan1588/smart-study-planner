@@ -1,0 +1,77 @@
+.sp-iconbtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--c-text-muted);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+
+.sp-iconbtn--md {
+  width: 36px;
+  height: 36px;
+}
+
+.sp-iconbtn--sm {
+  width: 30px;
+  height: 30px;
+}
+
+.sp-iconbtn:hover:not(:disabled) {
+  background: var(--c-surface-alt);
+  color: var(--c-text);
+}
+
+.sp-iconbtn:focus-visible {
+  box-shadow: var(--ring);
+}
+
+.sp-iconbtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sp-iconbtn--outline {
+  border-color: var(--c-border-strong);
+  background: var(--c-surface);
+}
+
+.sp-iconbtn--danger {
+  color: var(--c-danger);
+}
+
+.sp-iconbtn--danger:hover:not(:disabled) {
+  background: var(--c-danger-soft);
+  color: var(--c-danger-hover);
+}
+
+.sp-iconbtn--inverse {
+  color: var(--c-admin-sidebar-text);
+}
+
+.sp-iconbtn--inverse:hover:not(:disabled) {
+  background: var(--c-admin-sidebar-alt);
+  color: var(--c-text-inverse);
+}
+
+.sp-iconbtn__badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-danger);
+  color: var(--c-text-inverse);
+  border-radius: var(--r-full);
+  font-size: 10px;
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+}

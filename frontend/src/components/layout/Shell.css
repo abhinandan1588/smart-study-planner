@@ -1,0 +1,524 @@
+/* Shared shell skeleton for StudentLayout and AdminLayout. */
+
+.sp-shell {
+  min-height: 100%;
+  display: flex;
+  background: var(--c-bg);
+}
+
+/* --- Sidebar ------------------------------------------------------------ */
+
+.sp-shell__sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-w);
+  z-index: var(--z-drawer);
+  display: flex;
+  flex-direction: column;
+  background: var(--c-surface);
+  border-right: 1px solid var(--c-border);
+}
+
+.sp-shell__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: var(--topbar-h);
+  padding: 0 var(--sp-4);
+  border-bottom: 1px solid var(--c-border);
+  flex: none;
+}
+
+.sp-shell__brandname {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-shell__adminbadge {
+  flex: none;
+}
+
+.sp-shell__drawerclose {
+  display: none;
+  margin-left: auto;
+}
+
+.sp-shell__nav {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--sp-3) var(--sp-2);
+}
+
+.sp-shell__nav ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sp-shell__navlink {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  color: var(--c-text-muted);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.sp-shell__navlink:hover {
+  background: var(--c-surface-alt);
+  color: var(--c-text);
+  text-decoration: none;
+}
+
+.sp-shell__navlink:focus-visible {
+  box-shadow: var(--ring);
+}
+
+.sp-shell__navlink.is-active {
+  background: var(--c-primary-soft);
+  color: var(--c-primary-hover);
+}
+
+.sp-shell__navlink.is-active::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  border-radius: var(--r-full);
+  background: var(--c-primary);
+}
+
+.sp-shell__navlabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-shell__navbadge {
+  flex: none;
+  min-width: 20px;
+  padding: 1px 6px;
+  background: var(--c-danger);
+  color: var(--c-text-inverse);
+  border-radius: var(--r-full);
+  font-size: 11px;
+  font-weight: var(--fw-semibold);
+  text-align: center;
+}
+
+.sp-shell__sidefoot {
+  flex: none;
+  padding: var(--sp-3);
+  border-top: 1px solid var(--c-border);
+}
+
+.sp-shell__sidelink {
+  display: block;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  color: var(--c-text-muted);
+}
+
+.sp-shell__sidelink:hover {
+  background: var(--c-surface-alt);
+  color: var(--c-text);
+  text-decoration: none;
+}
+
+/* --- Admin sidebar treatment (dark slate) ------------------------------ */
+
+.sp-shell--admin .sp-shell__sidebar {
+  background: var(--c-admin-sidebar);
+  border-right-color: var(--c-admin-sidebar-border);
+  color: var(--c-admin-sidebar-text);
+}
+
+.sp-shell--admin .sp-shell__brand {
+  border-bottom-color: var(--c-admin-sidebar-border);
+}
+
+.sp-shell--admin .sp-shell__brandname {
+  color: var(--c-text-inverse);
+}
+
+.sp-shell--admin .sp-shell__navlink {
+  color: var(--c-admin-sidebar-muted);
+}
+
+.sp-shell--admin .sp-shell__navlink:hover {
+  background: var(--c-admin-sidebar-alt);
+  color: var(--c-text-inverse);
+}
+
+.sp-shell--admin .sp-shell__navlink.is-active {
+  background: var(--c-admin-sidebar-alt);
+  color: var(--c-text-inverse);
+}
+
+.sp-shell--admin .sp-shell__navlink.is-active::before {
+  background: #60a5fa;
+}
+
+.sp-shell--admin .sp-shell__navlink:focus-visible {
+  box-shadow: var(--ring-inverse);
+}
+
+.sp-shell--admin .sp-shell__sidefoot {
+  border-top-color: var(--c-admin-sidebar-border);
+}
+
+.sp-shell--admin .sp-shell__sidelink {
+  color: var(--c-admin-sidebar-muted);
+}
+
+.sp-shell--admin .sp-shell__sidelink:hover {
+  background: var(--c-admin-sidebar-alt);
+  color: var(--c-text-inverse);
+}
+
+/* --- Main column -------------------------------------------------------- */
+
+.sp-shell__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: var(--sidebar-w);
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-shell__topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--topbar-h);
+  padding: 0 var(--sp-6);
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.sp-shell__hamburger {
+  display: none;
+}
+
+.sp-shell__pagetitle {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-shell__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  width: min(280px, 34vw);
+}
+
+.sp-shell__searchicon {
+  position: absolute;
+  left: var(--sp-3);
+  color: var(--c-text-subtle);
+  pointer-events: none;
+}
+
+.sp-shell__searchinput {
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--sp-3) 0 36px;
+  background: var(--c-surface-alt);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  color: var(--c-text);
+}
+
+.sp-shell__searchinput::placeholder {
+  color: var(--c-text-subtle);
+}
+
+.sp-shell__searchinput:focus {
+  background: var(--c-surface);
+  border-color: var(--c-primary);
+  box-shadow: var(--ring);
+  outline: none;
+}
+
+.sp-shell__topactions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+
+.sp-shell__search ~ .sp-shell__topactions {
+  margin-left: 0;
+}
+
+.sp-shell__crumbs {
+  margin-right: auto;
+  min-width: 0;
+}
+
+.sp-shell__crumbs ol {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--c-text-muted);
+  overflow: hidden;
+}
+
+.sp-shell__crumbs li {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  white-space: nowrap;
+}
+
+.sp-shell__crumbs a {
+  color: var(--c-text-muted);
+}
+
+.sp-shell__crumbs [aria-current='page'] {
+  color: var(--c-text);
+  font-weight: var(--fw-medium);
+}
+
+.sp-shell__crumbsep {
+  color: var(--c-text-subtle);
+}
+
+.sp-shell__content {
+  flex: 1 1 auto;
+  padding: var(--sp-6);
+}
+
+.sp-shell__content:focus-visible {
+  box-shadow: none;
+}
+
+.sp-shell__container {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* --- User menu ---------------------------------------------------------- */
+
+.sp-usermenu__trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-1) var(--sp-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+}
+
+.sp-usermenu__trigger:hover,
+.sp-usermenu__trigger.is-open {
+  background: var(--c-surface-alt);
+}
+
+.sp-usermenu__trigger:focus-visible {
+  box-shadow: var(--ring);
+}
+
+.sp-shell--admin .sp-shell__sidefoot .sp-usermenu__trigger:hover {
+  background: var(--c-admin-sidebar-alt);
+}
+
+.sp-usermenu__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sp-usermenu__triggername {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-usermenu__role {
+  font-size: 11px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--c-text-muted);
+}
+
+.sp-shell--admin .sp-shell__sidefoot .sp-usermenu__triggername {
+  color: var(--c-text-inverse);
+}
+
+.sp-shell--admin .sp-shell__sidefoot .sp-usermenu__role {
+  color: var(--c-admin-sidebar-muted);
+}
+
+.sp-usermenu__header {
+  min-width: 0;
+}
+
+.sp-usermenu__name {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+
+.sp-usermenu__email {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The sidebar keeps a user block; the top bar only shows it on desktop. */
+.sp-shell__usermenu {
+  display: none;
+}
+
+/* --- Scrim + bottom nav ------------------------------------------------- */
+
+.sp-shell__scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-drawer) - 1);
+  border: 0;
+  padding: 0;
+  background: rgba(16, 24, 40, 0.45);
+  cursor: pointer;
+}
+
+.sp-shell__bottomnav {
+  display: none;
+}
+
+.sp-shell__bottomlink {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: 1 1 0;
+  padding: var(--sp-1) 0;
+  background: none;
+  border: 0;
+  color: var(--c-text-muted);
+  font-size: 11px;
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.sp-shell__bottomlink.is-active {
+  color: var(--c-primary);
+}
+
+.sp-shell__bottomlink:focus-visible {
+  box-shadow: var(--ring);
+  border-radius: var(--r-sm);
+}
+
+/* --- Below 1024px: sidebar becomes an off-canvas drawer ---------------- */
+
+@media (max-width: 1024px) {
+  .sp-shell__sidebar {
+    transform: translateX(-100%);
+    transition: transform var(--t-base);
+    box-shadow: var(--sh-md);
+  }
+
+  .sp-shell__sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .sp-shell__main {
+    margin-left: 0;
+  }
+
+  .sp-shell__hamburger,
+  .sp-shell__drawerclose {
+    display: inline-flex;
+  }
+
+  .sp-shell__scrim {
+    display: block;
+  }
+
+  .sp-shell__topbar {
+    padding: 0 var(--sp-4);
+  }
+
+  .sp-shell__content {
+    padding: var(--sp-5) var(--sp-4);
+  }
+}
+
+/* --- Below 640px: bottom tab bar for the student shell ----------------- */
+
+@media (max-width: 640px) {
+  .sp-shell__search {
+    display: none;
+  }
+
+  .sp-shell__pagetitle {
+    font-size: var(--fs-base);
+  }
+
+  .sp-shell--student .sp-shell__bottomnav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: var(--z-sticky);
+    display: flex;
+    align-items: stretch;
+    height: var(--bottomnav-h);
+    background: var(--c-surface);
+    border-top: 1px solid var(--c-border);
+  }
+
+  .sp-shell--student .sp-shell__content {
+    padding-bottom: calc(var(--bottomnav-h) + var(--sp-4));
+  }
+
+  .sp-shell__sidebar {
+    width: min(84vw, var(--sidebar-w));
+  }
+}
+
+/* --- Wide screens: show the avatar menu in the top bar too ------------- */
+
+@media (min-width: 1025px) {
+  .sp-shell__usermenu {
+    display: block;
+  }
+}

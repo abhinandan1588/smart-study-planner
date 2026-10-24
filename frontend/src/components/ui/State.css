@@ -1,0 +1,60 @@
+.sp-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-10) var(--sp-6);
+  text-align: center;
+}
+
+.sp-state--compact {
+  padding: var(--sp-6) var(--sp-4);
+}
+
+.sp-state--boxed {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+}
+
+.sp-state__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-full);
+  background: var(--c-surface-alt);
+  color: var(--c-text-muted);
+}
+
+.sp-state--error .sp-state__icon {
+  background: var(--c-danger-soft);
+  color: var(--c-danger);
+}
+
+.sp-state__title {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+
+.sp-state__description {
+  max-width: 46ch;
+  color: var(--c-text-muted);
+  font-size: var(--fs-base);
+}
+
+.sp-state__code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--c-text-subtle);
+}
+
+.sp-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}

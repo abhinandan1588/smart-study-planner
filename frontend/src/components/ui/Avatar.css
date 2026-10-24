@@ -1,0 +1,43 @@
+.sp-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: var(--c-primary-soft);
+  color: var(--c-primary-hover);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.01em;
+  user-select: none;
+}
+
+.sp-avatar__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sp-avatar--xs {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.sp-avatar--sm {
+  width: 30px;
+  height: 30px;
+  font-size: var(--fs-xs);
+}
+
+.sp-avatar--md {
+  width: 36px;
+  height: 36px;
+  font-size: var(--fs-sm);
+}
+
+.sp-avatar--lg {
+  width: 52px;
+  height: 52px;
+  font-size: var(--fs-md);
+}
