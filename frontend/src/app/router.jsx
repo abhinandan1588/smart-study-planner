@@ -36,6 +36,7 @@ import TimetablePage from '../features/planner/pages/TimetablePage';
 import AdminDashboardPage from '../features/admin/pages/AdminDashboardPage';
 import AdminSettingsPage from '../features/admin/pages/AdminSettingsPage';
 import AnnouncementsPage from '../features/admin/pages/AnnouncementsPage';
+import AuditLogsPage from '../features/admin/pages/AuditLogsPage';
 import CourseEditorPage from '../features/admin/pages/CourseEditorPage';
 import CourseManagementPage from '../features/admin/pages/CourseManagementPage';
 import MaterialManagementPage from '../features/admin/pages/MaterialManagementPage';
@@ -114,7 +115,11 @@ export default function AppRouter() {
             <Route path="materials" element={<MaterialManagementPage />} />
             <Route path="announcements" element={<AnnouncementsPage />} />
             <Route path="reports" element={<ReportsPage />} />
+
             <Route path="settings" element={<AdminSettingsPage />} />
+            {/* Audit review belongs to PRD 4.10 "Profile & Settings"; it also
+                has its own route so the dashboard can link straight to it. */}
+            <Route path="audit-logs" element={<AuditLogsPage />} />
           </Route>
         </Route>
       </Route>

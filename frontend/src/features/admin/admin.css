@@ -1,0 +1,407 @@
+/**
+ * Administration pages — plain CSS on the shared tokens.
+ *
+ * The admin shell already differs from the student shell (dark sidebar,
+ * breadcrumbs); these rules keep the admin *content* denser than the student
+ * pages: tighter filter bars, data-first tables and small inline metrics
+ * rather than large cards.
+ */
+
+/* --- filter bars -------------------------------------------------------- */
+
+.sp-adm__filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--sp-3) var(--sp-4);
+  /* Top aligned so labels line up even when one field carries a hint. */
+  align-items: start;
+}
+
+.sp-adm__filters--wide {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.sp-adm__filteractions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+/* Reorder controls reuse the chevron icon; "up" is the flipped variant. */
+.sp-adm__flip .sp-icon {
+  transform: rotate(180deg);
+}
+
+/**
+ * Row-level destructive action: readable as destructive without filling a
+ * table with solid red. The confirmation dialog still uses the solid danger
+ * button, so the strongest colour sits on the step that actually commits.
+ */
+.sp-btn.sp-adm__dangerbtn {
+  background: var(--c-surface);
+  border-color: var(--c-danger-border);
+  color: var(--c-danger);
+}
+
+.sp-btn.sp-adm__dangerbtn:hover:not(:disabled) {
+  background: var(--c-danger-soft);
+  border-color: var(--c-danger);
+}
+
+.sp-btn.sp-adm__dangerbtn:focus-visible {
+  box-shadow: var(--ring-danger);
+}
+
+/* --- metric strip ------------------------------------------------------- */
+
+.sp-adm__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+  gap: var(--sp-3);
+}
+
+/* --- generic two column split ------------------------------------------ */
+
+.sp-adm__split {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.sp-adm__split--even {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+@media (max-width: 980px) {
+  .sp-adm__split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- definition lists used by detail panels ---------------------------- */
+
+.sp-adm__dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--sp-3) var(--sp-5);
+  margin: 0;
+}
+
+.sp-adm__dl > div {
+  min-width: 0;
+}
+
+.sp-adm__dt {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  margin-bottom: 2px;
+}
+
+.sp-adm__dd {
+  margin: 0;
+  font-size: var(--fs-base);
+  color: var(--c-text);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+
+/* --- small inline lists ------------------------------------------------- */
+
+.sp-adm__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-adm__list > li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.sp-adm__list > li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sp-adm__list > li:first-child {
+  padding-top: 0;
+}
+
+.sp-adm__itemtitle {
+  font-weight: var(--fw-medium);
+  color: var(--c-text);
+}
+
+.sp-adm__itemmeta {
+  display: block;
+  font-size: var(--fs-sm);
+  color: var(--c-text-muted);
+}
+
+/* --- cell helpers ------------------------------------------------------- */
+
+.sp-adm__primary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sp-adm__primary strong {
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+
+.sp-adm__sub {
+  font-size: var(--fs-sm);
+  color: var(--c-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.sp-adm__rowactions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.sp-adm__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+
+.sp-adm__warnings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.sp-adm__warning {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+  padding: var(--sp-3);
+  border: 1px solid var(--c-warning-border);
+  background: var(--c-warning-soft);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  color: var(--c-text);
+}
+
+.sp-adm__warning--info {
+  border-color: var(--c-info-border);
+  background: var(--c-info-soft);
+}
+
+.sp-adm__note {
+  margin: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--c-info-border);
+  background: var(--c-info-soft);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  color: var(--c-text);
+}
+
+.sp-adm__note strong {
+  font-weight: var(--fw-semibold);
+}
+
+.sp-adm__error {
+  margin: 0;
+  color: var(--c-danger);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+/* --- syllabus tree editor ---------------------------------------------- */
+
+.sp-syltree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.sp-syltree__subject {
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  overflow: hidden;
+}
+
+.sp-syltree__subjecthead,
+.sp-syltree__node {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.sp-syltree__subjecthead {
+  background: var(--c-surface-alt);
+}
+
+.sp-syltree__node:last-child {
+  border-bottom: 0;
+}
+
+.sp-syltree__node--chapter {
+  padding-left: var(--sp-8);
+}
+
+.sp-syltree__node--topic {
+  padding-left: var(--sp-12);
+}
+
+.sp-syltree__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sp-syltree__title {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  color: var(--c-text);
+  overflow-wrap: anywhere;
+}
+
+.sp-syltree__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+.sp-syltree__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.sp-syltree__toggle {
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-muted);
+  border-radius: var(--r-sm);
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sp-syltree__toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.sp-syltree__toggle[aria-expanded='true'] .sp-icon {
+  transform: rotate(0deg);
+}
+
+.sp-syltree__toggle[aria-expanded='false'] .sp-icon {
+  transform: rotate(-90deg);
+}
+
+/* --- CSV import preview ------------------------------------------------- */
+
+.sp-adm__filepick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.sp-adm__filepick input[type='file'] {
+  font: inherit;
+  color: var(--c-text);
+}
+
+.sp-adm__preview {
+  overflow-x: auto;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+}
+
+.sp-adm__preview table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-xs);
+}
+
+.sp-adm__preview th,
+.sp-adm__preview td {
+  text-align: left;
+  padding: var(--sp-2);
+  border-bottom: 1px solid var(--c-border);
+  white-space: nowrap;
+}
+
+.sp-adm__preview th {
+  background: var(--c-surface-alt);
+  font-weight: var(--fw-semibold);
+  color: var(--c-text-muted);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: var(--tracking-wide);
+}
+
+.sp-adm__preview tr.is-bad td {
+  background: var(--c-danger-soft);
+}
+
+/* --- announcement preview ---------------------------------------------- */
+
+.sp-adm__previewbody {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-base);
+  line-height: var(--lh-relaxed);
+  color: var(--c-text);
+  margin: 0;
+}
+
+/* --- audit detail ------------------------------------------------------- */
+
+.sp-adm__code {
+  margin: 0;
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-border);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-base);
+  color: var(--c-text);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sp-adm__mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}

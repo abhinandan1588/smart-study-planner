@@ -41,18 +41,31 @@ export const adminApi = {
     get: (id) => get(`/admin/courses/${id}`),
     create: (payload) => post('/admin/courses', payload),
     update: (id, payload) => patch(`/admin/courses/${id}`, payload),
-    /** DELETE archives the course; it never hard-deletes one with enrollments. */
-    archive: (id) => del(`/admin/courses/${id}`),
+    /**
+     * DELETE archives the course; it never hard-deletes one with enrollments.
+     * `confirm` acknowledges the active-enrollment impact the API reports in
+     * its 409, `hard` only succeeds when nothing depends on the course.
+     */
+    archive: (id, { confirm = false, hard = false } = {}) =>
+      del(`/admin/courses/${id}`, {
+        params: cleanParams({
+          confirm: confirm ? 'true' : '',
+          hard: hard ? 'true' : '',
+        }),
+      }),
     publish: (id) => post(`/admin/courses/${id}/publish`),
-    unpublish: (id) => post(`/admin/courses/${id}/unpublish`),
+    unpublish: (id, { confirm = false } = {}) =>
+      post(`/admin/courses/${id}/unpublish`, confirm ? { confirm: true } : {}),
     preview: (id, params = {}) =>
       get(`/admin/courses/${id}/preview`, { params: cleanParams(params) }),
     enrollments: (id, params = {}) =>
       get(`/admin/courses/${id}/enrollments`, { params: cleanParams(params) }),
     listSubjects: (id) => get(`/admin/courses/${id}/subjects`),
     linkSubject: (id, payload) => post(`/admin/courses/${id}/subjects`, payload),
-    unlinkSubject: (id, subjectId) =>
-      del(`/admin/courses/${id}/subjects/${subjectId}`),
+    unlinkSubject: (id, subjectId, { confirm = false } = {}) =>
+      del(`/admin/courses/${id}/subjects/${subjectId}`, {
+        params: cleanParams({ confirm: confirm ? 'true' : '' }),
+      }),
     reorderSubjects: (id, order) =>
       patch(`/admin/courses/${id}/subjects/reorder`, { order }),
   },
@@ -65,8 +78,14 @@ export const adminApi = {
       get(`/admin/subjects/${id}/units`, { params: cleanParams(params) }),
     create: (payload) => post('/admin/subjects', payload),
     update: (id, payload) => patch(`/admin/subjects/${id}`, payload),
-    archive: (id) => del(`/admin/subjects/${id}`),
-    reorder: (order) => patch('/admin/subjects/reorder', { order }),
+    /** DELETE archives; `hard` only succeeds with no units and no progress. */
+    archive: (id, { hard = false } = {}) =>
+      del(`/admin/subjects/${id}`, {
+        params: cleanParams({ hard: hard ? 'true' : '' }),
+      }),
+    /** Reorder the subjects linked to one course. */
+    reorder: (courseId, items) =>
+      patch('/admin/subjects/reorder', { course_id: courseId, items }),
   },
 
   /* --- 5. Syllabus management ------------------------------------------ */
@@ -113,10 +132,16 @@ export const adminApi = {
         : patch(`/admin/resources/${id}`, fields),
     publish: (id) => post(`/admin/resources/${id}/publish`),
     unpublish: (id) => post(`/admin/resources/${id}/unpublish`),
-    /** DELETE archives; `hard` removes the file and the row (audited). */
-    remove: (id, { hard = false } = {}) =>
+    /**
+     * DELETE archives; `hard` removes the file and the row (audited).
+     * `confirm` acknowledges the download count the API reports in its 409.
+     */
+    remove: (id, { hard = false, confirm = false } = {}) =>
       del(`/admin/resources/${id}`, {
-        params: cleanParams({ hard: hard ? 'true' : '' }),
+        params: cleanParams({
+          hard: hard ? 'true' : '',
+          confirm: confirm ? 'true' : '',
+        }),
       }),
     storage: () => get('/admin/resources/storage'),
     downloadFile: async (resource) => {
@@ -132,9 +157,14 @@ export const adminApi = {
     get: (id) => get(`/admin/announcements/${id}`),
     create: (payload) => post('/admin/announcements', payload),
     update: (id, payload) => patch(`/admin/announcements/${id}`, payload),
-    remove: (id) => del(`/admin/announcements/${id}`),
+    /** DELETE archives; `hard` removes the row (delivered notices are kept). */
+    remove: (id, { hard = false } = {}) =>
+      del(`/admin/announcements/${id}`, {
+        params: cleanParams({ hard: hard ? 'true' : '' }),
+      }),
     publish: (id) => post(`/admin/announcements/${id}/publish`),
-    expire: (id) => post(`/admin/announcements/${id}/expire`),
+    expire: (id, expiresAt) =>
+      post(`/admin/announcements/${id}/expire`, cleanParams({ expires_at: expiresAt })),
     recipients: (id, params = {}) =>
       get(`/admin/announcements/${id}/recipients`, { params: cleanParams(params) }),
   },

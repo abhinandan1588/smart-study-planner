@@ -6407,3 +6407,284 @@ generated batch, the goal), and the demo student's seeded availability and
 - Browser push notifications are requested through the standard `Notification`
   API when a focus session starts; headless Chrome cannot grant that permission,
   so only the in-app toast path was observed.
+
+---
+
+## frontend-admin
+
+Every admin `PagePlaceholder` is gone. All nine PRD 4.1 destinations (plus the
+student-detail, course-editor and audit-log sub-routes) render real data from the
+real `/api/v1/admin/*` endpoints. No mock data, no TODOs, no stubs. The existing
+`AdminLayout`, design tokens, shared UI kit (`DataTable`, `ConfirmDialog`,
+`Dialog`/`Drawer`, `Skeleton`, `EmptyState`, `ErrorState`, `Toast`, `Tabs`,
+`Pagination`, `MetricTile`), `AuthContext`, route guards and `services/adminApi.js`
+were reused; one new stylesheet (`features/admin/admin.css`, plain CSS on the
+same tokens, `sp-adm__*` naming) was added and no second styling system was
+introduced.
+
+### Pages shipped and the endpoints each one calls
+
+| # (PRD 4.1) | Route | Page | Endpoints |
+|---|---|---|---|
+| 1 Dashboard | `/admin/dashboard` | `admin/pages/AdminDashboardPage.jsx` | `GET /admin/dashboard?from=&to=` — totals, `students_by_status`, course/resource counts, `enrollment_distribution`, `popular_courses`, `activity[]`, `signups[]`, `recent_registrations[]`, `recent_admin_actions[]`, `warnings[]`, `storage` |
+| 2 Student Management | `/admin/students` | `admin/pages/StudentManagementPage.jsx` | `GET /admin/students?q=&status=&course_id=&registered_from=&registered_to=&sort=&page=`, `GET /admin/students/:id` (drawer), `PATCH /admin/students/:id/status`, `POST /admin/students/bulk`, `POST /admin/students/:id/password-reset`, `GET /admin/students/export` |
+| 2a Student profile | `/admin/students/:id` | `admin/pages/StudentDetailPage.jsx` | `GET /admin/students/:id`, `PATCH /admin/students/:id/status`, `POST /admin/students/:id/password-reset` |
+| 3 Course Management | `/admin/courses` | `admin/pages/CourseManagementPage.jsx` + `components/CourseFormDrawer.jsx` | `GET /admin/courses?q=&status=&category=&sort=&page=`, `POST /admin/courses`, `PATCH /admin/courses/:id`, `POST /admin/courses/:id/publish`, `POST /admin/courses/:id/unpublish` (`confirm`), `DELETE /admin/courses/:id?confirm=true` (archive) |
+| 3a Course editor | `/admin/courses/:id` | `admin/pages/CourseEditorPage.jsx` | `GET /admin/courses/:id`, `GET/POST /admin/courses/:id/subjects`, `DELETE /admin/courses/:id/subjects/:subjectId?confirm=true`, `PATCH /admin/courses/:id/subjects/reorder`, `GET /admin/courses/:id/enrollments` |
+| 4 Subject Management | `/admin/subjects` | `admin/pages/SubjectManagementPage.jsx` | `GET /admin/subjects?q=&status=&course_id=&sort=&page=`, `POST /admin/subjects`, `PATCH /admin/subjects/:id`, `DELETE /admin/subjects/:id` (archive), `PATCH /admin/subjects/reorder`, `GET /admin/subjects/:id` |
+| 5 Syllabus Management | `/admin/syllabus` | `admin/pages/SyllabusManagementPage.jsx` + `components/SyllabusTreeEditor.jsx`, `SyllabusItemDialog.jsx`, `SyllabusImportDialog.jsx` | `GET /admin/syllabus?course_id=&version_id=`, `GET /admin/syllabus/preview`, `POST /admin/syllabus/versions`, `POST /admin/syllabus/versions/:id/publish`, `PATCH /admin/syllabus/versions/:id`, `POST /admin/syllabus/versions/:id/migrate-progress`, `GET /admin/syllabus/versions/:id/impact`, `POST /admin/syllabus`, `PATCH /admin/syllabus/:id`, `DELETE /admin/syllabus/:id?kind=&force=`, `PATCH /admin/syllabus/reorder`, `POST /admin/syllabus/import`, `GET /admin/syllabus/import/template` |
+| 6 Study Material Management | `/admin/materials` | `admin/pages/MaterialManagementPage.jsx` + `components/ResourceFormDrawer.jsx` | `GET /admin/resources?scope=&q=&type=&status=&visibility=&course_id=&page=`, `POST /admin/resources` (multipart), `PATCH /admin/resources/:id` (JSON or multipart replace), `POST /admin/resources/:id/publish|unpublish`, `DELETE /admin/resources/:id(?hard=&confirm=)`, `GET /admin/resources/:id/file`, `GET /admin/resources/storage` |
+| 7 Announcements & Notifications | `/admin/announcements` | `admin/pages/AnnouncementsPage.jsx` | `GET /admin/announcements?q=&status=&audience=&page=`, `POST /admin/announcements`, `PATCH /admin/announcements/:id`, `POST /admin/announcements/:id/publish`, `POST /admin/announcements/:id/expire`, `DELETE /admin/announcements/:id(?hard=)`, `GET /admin/announcements/:id/recipients` |
+| 8 Reports & Analytics | `/admin/reports` | `admin/pages/ReportsPage.jsx` | `GET /admin/reports?type=&from=&to=&course_id=` for all nine report types, `GET /admin/reports/summary`, `GET /admin/reports/export` (CSV) |
+| 9 Profile & Settings | `/admin/settings` | `admin/pages/AdminSettingsPage.jsx` | `GET/PATCH /admin/profile`, `POST /admin/profile/password`, `GET/PATCH /admin/settings`, `GET/POST /admin/admins`, `PATCH /admin/admins/:id`, `POST /admin/admins/:id/password-reset`, `GET /admin/health`, plus the audit table |
+| 9a Audit logs | `/admin/audit-logs` | `admin/pages/AuditLogsPage.jsx` + `components/AuditLogTable.jsx` | `GET /admin/audit-logs?action=&entity_type=&actor_id=&from=&to=&page=` |
+
+`ADMIN_NAV` still holds exactly the nine PRD 4.1 items. Audit review is PRD 4.10
+("Review audit logs") so it lives under Profile & Settings as its own tab, and
+`/admin/audit-logs` renders the same `AuditLogTable` as a full page so the
+dashboard's "Recent administrative actions" card can link straight to it.
+
+### Notable implementation details
+
+- **Optimistic status changes, reconciled from the server.** Suspend/activate
+  patches the row to the intended status, then overwrites that row with the
+  `student` object the API returns; a rejected change reverts to the previous
+  status instead of leaving a lie on screen. Bulk actions do the same and then
+  refetch the page.
+- **Lifecycle confirmations carry the real impact.** The dialog text quotes the
+  active-enrollment count from the row and the request sends `confirm=true`, so
+  the UI confirmation *is* the API's confirmation rather than a second round
+  trip. Every dialog states that enrollments and `topic_progress` are preserved.
+- **Versioning is surfaced, not hidden.** The syllabus page shows the selected
+  version's status, a "How progress survives a revision" explanation, the live
+  `student_impact` progress-row count, the impact report, the publish report's
+  `migrated_progress_rows`, and the idempotent re-run migration action. Archived
+  versions render read-only.
+- **Reorder is button driven** (move up / move down on units, chapters, topics
+  and course subjects) so it is keyboard operable; each press sends the new
+  `display_order` for that sibling group and reverts to the server's order if
+  the call fails.
+- **CSV import** parses the file locally for a preview table with per-row local
+  checks, then renders the server's authoritative `report.errors[]`
+  (`row`/`column`/`message`) verbatim after the upload, next to the
+  `created` counts.
+- **Upload validation** mirrors the backend's `TYPE_EXTENSIONS` and reads the
+  real `max_upload_mb` / `allowed_extensions` from `GET /admin/resources/storage`
+  rather than hardcoding them; a server rejection renders `fields.file` verbatim.
+- **Private student uploads** are listed under the "Student uploads" scope for
+  storage accounting only — the row offers no open/edit/delete action, matching
+  the API's 403.
+- **Colour restraint (PRD 9).** Row-level destructive actions use a
+  danger-outlined button (`.sp-adm__dangerbtn`); the solid red is reserved for
+  the confirm button inside the dialog. Topic rows carry one status badge
+  (difficulty) with importance as plain text.
+
+### Commands
+
+```
+cd "/home/abhi/Apps/Study planner/frontend" && npm run build
+# Flask and Vite were already running in the background from the previous steps:
+cd "/home/abhi/Apps/Study planner/backend" && nohup .venv/bin/python -m flask --app run.py run > /tmp/flask.log 2>&1 &
+cd "/home/abhi/Apps/Study planner/frontend" && setsid nohup node node_modules/vite/bin/vite.js > /tmp/vite.log 2>&1 < /dev/null &
+tail -f /tmp/flask.log /tmp/vite.log
+```
+
+Flask listens on 5000; Vite reported `Port 5173 is in use, trying another one...`
+and bound **5174**, so every check below went through the 5174 proxy.
+
+### Build tail (exit 0, zero errors, zero warnings)
+
+```
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 836 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     1.13 kB │ gzip:   0.55 kB
+dist/assets/index-CmySNfbe.css     75.58 kB │ gzip:  11.67 kB
+dist/assets/react-P7IZ5rWM.js      51.62 kB │ gzip:  18.28 kB
+dist/assets/recharts-CJ3OxtLF.js  400.43 kB │ gzip: 115.44 kB
+dist/assets/index-NxXYPsy2.js     626.14 kB │ gzip: 181.35 kB
+✓ built in 4.61s
+```
+
+### Browser verification (headless Chrome at /usr/bin/google-chrome)
+
+`puppeteer-core` installed **outside** the repo (`/tmp/pptr`, scripts
+`admin-smoke.mjs` and `admin-smoke2.mjs`) so no verification dependency entered
+`package.json`. Logged in through the real `/login` form as the seeded admin
+`admin@studyplanner.test`, then visited every admin route. Console errors and
+warnings, uncaught exceptions, failed requests and any `/api/v1` response ≥ 400
+were collected.
+
+```
+after admin login URL: http://127.0.0.1:5174/admin/dashboard
+/admin/dashboard             | Dashboard                     | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:0  | charts:3
+/admin/students              | Student Management            | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:7  | charts:0
+/admin/students/3            | Priya Verma                   | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:0  | charts:1
+/admin/courses               | Course Management             | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:4  | charts:0
+/admin/courses/1             | UPSC Civil Services — Prelims | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:0  | charts:0
+/admin/subjects              | Subject Management            | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:11 | charts:0
+/admin/syllabus?course_id=1  | Syllabus Management           | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:0  | charts:0
+/admin/materials             | Study Material Management     | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:10 | charts:0
+/admin/announcements         | Announcements & Notifications | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:4  | charts:0
+/admin/reports               | Reports & Analytics           | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:15 | charts:1
+/admin/audit-logs            | Audit Logs                    | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:25 | charts:0
+/admin/settings              | Profile & Settings            | problems:0 | placeholder:0 | skeletons:0 | errorStates:0 | rows:0  | charts:0
+/admin/students keyboard-reachable controls: 55
+/admin/dashboard @390px horizontal overflow: false
+/admin/students @390px horizontal overflow: false
+/admin/syllabus?course_id=1 @390px horizontal overflow: false
+```
+
+`placeholder:0` = no `.sp-placeholder__endpoints` node anywhere.
+`skeletons:0` = no skeleton left on screen after load, i.e. every page resolved
+its data. `errorStates:0` = no `ErrorState` rendered. Rows/charts are the real
+`.sp-table tbody tr` and `.recharts-surface` counts.
+
+Interaction pass (`admin-smoke2.mjs`), zero console problems:
+
+```
+syllabus tree: {"subjects":4,"nodes":49,"topics":29,"chapters":13,
+                "versionNote":"How progress survives a revision. Students read the publishe"}
+import dialog: {"open":true,"title":"Bulk import syllabus from CSV","fileInput":true}
+course drawer: {"open":true,"title":"New course","focused":"BUTTON"}
+course editor tab "Subjects" panel chars: 473
+course editor tab "Syllabus versions" panel chars: 300
+course editor tab "Enrolled students" panel chars: 285
+settings tab "Platform settings" panel chars: 635
+settings tab "Administrators" panel chars: 187
+settings tab "Service health" panel chars: 139
+settings tab "Audit logs" panel chars: 1969
+report "Registrations"     -> rows:15 charts:1 metrics:3
+report "Active users"      -> rows:15 charts:1 metrics:4
+report "Enrollments"       -> rows:4  charts:1 metrics:4
+report "Resources"         -> rows:10 charts:1 metrics:4
+report "Engagement"        -> rows:4  charts:1 metrics:4
+report "Syllabus progress" -> rows:11 charts:1 metrics:5
+report "Focus sessions"    -> rows:15 charts:1 metrics:5
+report "Notifications"     -> rows:7  charts:1 metrics:4
+report "Accounts"          -> rows:15 charts:2 metrics:6
+--- admin interaction problems (0) ---
+```
+
+**A student account cannot reach `/admin/*` in the UI** (checked in a separate
+browser context so the admin session could not leak into it):
+
+```
+student landed on: http://127.0.0.1:5174/app/dashboard
+student -> /admin/dashboard   ends at /app/dashboard  heading:"Good evening, Aarav" adminShell:0 adminLinks:0
+student -> /admin/students    ends at /app/dashboard  heading:"Good evening, Aarav" adminShell:0 adminLinks:0
+student -> /admin/audit-logs  ends at /app/dashboard  heading:"Good evening, Aarav" adminShell:0 adminLinks:0
+student -> /admin/reports     ends at /app/dashboard  heading:"Good evening, Aarav" adminShell:0 adminLinks:0
+student page problems (0)
+```
+
+Full-page screenshots were captured for all twelve desktop routes plus three
+390 px mobile passes and the dialog/drawer/tab states
+(`/tmp/adminscreens/*.png`, summaries in `report.json` / `report2.json`); they
+are not committed. They were reviewed, and these were fixed as a result:
+
+| Found in screenshot | Fix |
+|---|---|
+| Students, courses, subjects, materials and announcements tables were a wall of solid red Archive/Suspend buttons | `.sp-adm__dangerbtn` outline style for row actions; solid red kept for the confirm button in the dialog |
+| Action column wrapped onto two lines on materials (4 buttons), announcements and subjects | widened the column and dropped the redundant leading icons |
+| "Scope"/"Filters" cards misaligned a select when a neighbouring field carried a hint | `.sp-adm__filters` switched from `align-items: end` to `start` |
+| Every syllabus topic row showed two coloured badges (difficulty + importance) | importance rendered as plain text; one status colour per row |
+| `1 units`, `1 topics` in the syllabus subject headers | `pluralize()` |
+| A 365-row report table rendered in full | report rows paginate locally at 15 per page |
+
+### Endpoint checks through the Vite proxy
+
+Every page's read endpoint, with the seeded admin's bearer token
+(`http://127.0.0.1:5174/api/v1`):
+
+```
+200 /admin/dashboard?from=2026-09-26&to=2026-10-25
+200 /admin/students?page=1&per_page=20&sort=-created_at     200 /admin/students/3
+200 /admin/courses?page=1&per_page=20&sort=-updated_at      200 /admin/courses/1
+200 /admin/courses/1/subjects                               200 /admin/courses/1/enrollments
+200 /admin/subjects?page=1&per_page=20&sort=name            200 /admin/subjects?course_id=1
+200 /admin/subjects/1                                       200 /admin/syllabus?course_id=1
+200 /admin/syllabus/versions?course_id=1                    200 /admin/syllabus/preview?course_id=1
+200 /admin/resources?scope=shared&page=1                    200 /admin/resources/storage
+200 /admin/announcements?page=1&per_page=20                 200 /admin/reports/summary
+200 /admin/reports?type={registrations,active_users,enrollments,resources,engagement,
+                          progress,focus,notifications,accounts}   (9/9)
+200 /admin/audit-logs?page=1&per_page=25                    200 /admin/profile
+200 /admin/settings      200 /admin/admins?per_page=50      200 /admin/health
+```
+
+Every mutating flow, sent with the exact payload shape the pages build:
+
+```
+POST   /admin/courses            {title,description,category:"skill",level:"",thumbnail_url:"",
+                                  estimated_duration_weeks:null,target_audience:"",status:"draft"}   201
+POST   /admin/courses/5/publish                                                                      200
+POST   /admin/subjects           {name,description:"",weightage:12.5,status:"active",course_id:5}    201
+POST   /admin/syllabus/versions  {course_id:5,notes,clone:true}                                      201
+POST   /admin/syllabus           {kind:"unit",syllabus_version_id,subject_id,title,unit_type}        201
+POST   /admin/syllabus           {kind:"chapter",...,parent_id}                                      201
+POST   /admin/syllabus           {kind:"topic",unit_id,title,estimated_minutes,difficulty,importance} 201 (x2)
+PATCH  /admin/syllabus/reorder   {kind:"topic",items:[{id,display_order}x2]}  -> {"updated":2,"ids":[105,104]}
+PATCH  /admin/syllabus/reorder   {kind:"unit",items:[{id,display_order}]}     -> {"updated":1}
+PATCH  /admin/syllabus/:id       {kind:"topic",...}  -> progress_preserved = True                    200
+PATCH  /admin/subjects/reorder   {course_id,items:[{subject_id,display_order}]}                      200
+GET    /admin/syllabus/versions/6/impact   -> {progress_rows:0, students:0, topics:2}, 0 enrollments 200
+POST   /admin/syllabus/versions/6/publish  -> publication{topics:2, migrated_progress_rows:0,
+                                              archived_versions:[], student_progress_preserved:True} 200
+POST   .../migrate-progress (replay)       -> created_progress_rows: 0 (idempotent)                  200
+DELETE /admin/syllabus/105?kind=topic                                                                204
+POST   /admin/syllabus/import    multipart CSV, 6 rows (3 good, 3 deliberately broken)               201
+         rows_read 6 valid 3 rejected 3 | created {subjects:0, units:1, chapters:1, topics:3}
+         row 5 col unit              - Unit is required.
+         row 6 col estimated_minutes - 'abc' is not a number.
+         row 7 col difficulty        - Must be one of: easy, medium, hard.
+GET    /admin/syllabus/import/template  -> CSV header row                                            200
+POST   /admin/resources          multipart note, published, enrolled_only                            201
+POST   /admin/resources          .png declared as "note" -> VALIDATION_ERROR
+                                 {'file': 'A note resource accepts: doc, docx, md, pdf, txt.'}       422
+POST   /admin/resources/14/unpublish | /publish                                                  200 | 200
+PATCH  /admin/resources/14       metadata only (JSON)                                                200
+GET    /admin/resources/14/file  -> streamed "FE verify material body"                               200
+POST   /admin/announcements      {title,body,audience:"course",status:"draft",publish_at:null,
+                                  expires_at:null,course_id:5}                                       201
+POST   /admin/announcements/5/publish | /expire                                                  200 | 200
+PATCH  /admin/students/4/status  {status:"suspended",reason}  -> "Account status changed from
+                                  active to suspended." (then reverted to active)              200 | 200
+PATCH  /admin/settings           {settings:{course_categories[],allowed_resource_types[],
+                                  notification_defaults{},max_upload_mb:20}}                         200
+GET    /admin/students/export    -> CSV header id,full_name,email,status,email_verified,...          200
+GET    /admin/reports/export?type=enrollments -> CSV header course_id,course,course_status,...       200
+```
+
+`/tmp/vite.log` contains only the ready banner and HMR lines (0 matches for
+error/failed). `/tmp/flask.log` has **zero tracebacks** across the whole run; the
+only 5xx in the file is the `POST /student/ai/quiz -> 503` from the earlier
+AI step (no provider key). The 4xx entries during this run are the deliberate
+wrong-file-type 422 plus a handful of 422/404 from one broken shell loop
+(`UID` is a readonly bash variable, so ids came through empty); the loop was
+re-run correctly and is the one transcribed above.
+
+All verification data was removed afterwards (course "FE Verify Course" with its
+2 syllabus versions, subject, uploaded resource + its stored file, announcement),
+restoring the seeded state: 4 courses, 11 subjects, 13 resources, 4
+announcements, and student 4 back to `active`. The audit rows those actions wrote
+were deliberately left in place — the audit log is an append-only record.
+
+### Not verified
+
+- No automated frontend test suite was added (the brief rules one out), so these
+  pages have no unit or component tests.
+- Accessibility was checked only mechanically: 55 keyboard-reachable controls on
+  the students page, `aria-*` wiring inherited from the shared components,
+  focus-trapped dialogs/drawers, visible `--ring` focus styles, token contrast
+  and no horizontal overflow at 390 px. Full WCAG conformance needs manual
+  assistive-technology testing and an expert review.
+- Drag-and-drop reordering was not implemented; reordering is button driven
+  (move up / move down), which the PRD allows and which stays keyboard operable.
+- The admin resource "replace file" multipart `PATCH` path is coded against the
+  documented contract but was exercised only with the JSON metadata variant.
+- Scheduled announcements were created and published/expired immediately; the
+  time-based transition from `scheduled` to `published` is the backend's and was
+  not waited out.
