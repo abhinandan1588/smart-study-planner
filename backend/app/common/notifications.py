@@ -210,7 +210,7 @@ def _announcements(user):
     if not notification_enabled(user, "announcement"):
         return 0
     created = 0
-    for announcement in visible_announcements(user.id):
+    for announcement in visible_announcements(user.id, role=user.role):
         _, made = create_notification(
             user.id,
             "announcement",
@@ -223,8 +223,8 @@ def _announcements(user):
     return created
 
 
-def visible_announcements(user_id):
-    """Published, unexpired announcements targeted at this student."""
+def visible_announcements(user_id, role="student"):
+    """Published, unexpired announcements targeted at this account."""
     now = utcnow()
     course_ids = [
         row[0]
@@ -237,16 +237,20 @@ def visible_announcements(user_id):
         db.or_(Announcement.publish_at.is_(None), Announcement.publish_at <= now),
         db.or_(Announcement.expires_at.is_(None), Announcement.expires_at >= now),
     )
+    targets = [
+        Announcement.audience == "all",
+        db.and_(
+            Announcement.audience == "role", Announcement.target_role == role
+        ),
+    ]
     if course_ids:
-        audience_filter = db.or_(
-            Announcement.audience == "all",
+        targets.append(
             db.and_(
                 Announcement.audience == "course",
                 Announcement.course_id.in_(course_ids),
-            ),
+            )
         )
-    else:
-        audience_filter = Announcement.audience == "all"
+    audience_filter = db.or_(*targets)
     return (
         query.filter(audience_filter)
         .order_by(Announcement.publish_at.desc(), Announcement.id.desc())

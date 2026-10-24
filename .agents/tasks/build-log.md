@@ -2955,3 +2955,1994 @@ HTTP 401
 | No token | 401 `UNAUTHORIZED` |
 
 58 verification steps, 0 failures.
+
+## backend-admin
+
+Phase 3 of the plan: every administrator endpoint of PRD section 4, built on the
+existing app factory, models, `@admin_required` decorator, `paginate()`
+envelope, `record_audit()` helper and the uniform error handler. 74 routes under
+`/api/v1/admin/`, covering all nine PRD 4.1 navigation areas.
+
+### New modules
+
+```
+app/admin/__init__.py            blueprint + module registration
+app/admin/helpers.py             get_or_404, audit(), unique_slug(), csv_response()
+app/admin/serializers.py         admin-facing shapes (no private student content)
+app/admin/routes_dashboard.py    1. Dashboard
+app/admin/routes_students.py     2. Student Management
+app/admin/routes_courses.py      3. Course Management (lifecycle + subject links)
+app/admin/routes_subjects.py     4. Subject Management
+app/admin/routes_syllabus.py     5. Syllabus Management (units/chapters/topics)
+app/admin/syllabus_service.py    versioning, progress migration, CSV import
+app/admin/routes_resources.py    6. Study Material Management
+app/admin/routes_announcements.py 7. Announcements & Notifications
+app/admin/routes_reports.py      8. Reports & Analytics
+app/admin/reports_service.py     the nine aggregate report builders
+app/admin/routes_settings.py     9. Profile & Settings (+ admin accounts)
+app/admin/routes_audit.py        audit log review + health (pre-existing)
+```
+
+### Migration
+
+Four additive nullable columns were needed:
+
+| Column | Purpose |
+|---|---|
+| `announcements.target_role` | role targeting (`audience='role'`) |
+| `syllabus_versions.cloned_from_version_id` | version lineage |
+| `syllabus_units.cloned_from_unit_id` | unit lineage for progress migration |
+| `topics.cloned_from_topic_id` | **topic lineage — this is what carries student progress forward** |
+
+```bash
+cd "/home/abhi/Apps/Study planner/backend"
+export FLASK_APP=run.py
+.venv/bin/flask db migrate -m "admin: announcement role targeting and syllabus clone lineage"
+.venv/bin/flask db upgrade
+```
+
+```
+INFO  [alembic.autogenerate.compare.tables] Detected added column 'announcements.target_role'
+INFO  [alembic.autogenerate.compare.tables] Detected added column 'syllabus_units.cloned_from_unit_id'
+INFO  [alembic.autogenerate.compare.constraints] Detected added foreign key (cloned_from_unit_id)(id) on table syllabus_units
+INFO  [alembic.autogenerate.compare.tables] Detected added column 'syllabus_versions.cloned_from_version_id'
+INFO  [alembic.autogenerate.compare.constraints] Detected added foreign key (cloned_from_version_id)(id) on table syllabus_versions
+INFO  [alembic.autogenerate.compare.tables] Detected added column 'topics.cloned_from_topic_id'
+INFO  [alembic.autogenerate.compare.constraints] Detected added foreign key (cloned_from_topic_id)(id) on table topics
+  Generating migrations/versions/125c14b95b85_admin_announcement_role_targeting_and_.py ... done
+INFO  [alembic.runtime.migration] Running upgrade 6c14e2618786 -> 125c14b95b85, admin: announcement role targeting and syllabus clone lineage
+```
+
+### Re-seed (the schema changed)
+
+```bash
+cd "/home/abhi/Apps/Study planner/backend"
+export FLASK_APP=run.py
+.venv/bin/flask seed --reset
+```
+
+```
+Clearing existing rows...
+Seed summary
+------------
+  admin accounts     : 1 (created)
+  student accounts   : 3
+  courses            : 3 (published, syllabus version 1)
+  syllabus topics    : 70
+  enrollments added  : 6
+  progress rows      : 60
+  study sessions     : 105
+  focus sessions     : 59
+  tasks              : 24
+  goals              : 12
+  achievements award : 6
+  notifications      : 9
+  resources          : 9
+  announcements      : 2
+  platform settings  : 4
+
+Login credentials
+-----------------
+  ADMIN    admin@studyplanner.test      Admin@12345
+  STUDENT  aarav@studyplanner.test      Student@123
+  STUDENT  priya@studyplanner.test      Student@123
+  STUDENT  rohan@studyplanner.test      Student@123
+```
+
+### Boot (background, never foregrounded)
+
+```bash
+cd "/home/abhi/Apps/Study planner/backend"
+pkill -f run.py; nohup .venv/bin/python run.py > /tmp/flask.log 2>&1 &
+tail -f /tmp/flask.log
+```
+
+```
+2026-10-24 21:52:38,179 INFO     app: Smart Study Planner API ready (env=development, db=sqlite:////home/abhi/Apps/Study planner/backend/instance/app.db)
+ * Serving Flask app 'app'
+ * Debug mode: on
+2026-10-24 21:52:38,209 INFO     werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-10-24 21:52:38,210 INFO     werkzeug: Press CTRL+C to quit
+```
+
+Clean boot, zero import errors. After the whole verification run below,
+`grep -nEi "traceback|exception|\" 500 " /tmp/flask.log` returned nothing.
+
+### Syllabus versioning: how student progress survives a revision
+
+`topic_progress` rows reference `topics.id`. Three rules keep them intact:
+
+1. **Structural edits happen on a draft version.** `POST /admin/syllabus/versions`
+   clones the published tree into a new `syllabus_versions` row plus new unit and
+   topic rows. Students keep reading the published version while the draft is
+   edited, so nothing they have done is touched.
+2. **Publishing migrates progress forward instead of resetting it.** Each cloned
+   row stores its ancestor (`cloned_from_unit_id` / `cloned_from_topic_id`).
+   `POST /admin/syllabus/versions/:id/publish` copies every student's progress row
+   from the ancestor topic onto the new topic — status, minutes spent, notes,
+   priority, target date and revision schedule — skipping any row that already
+   exists, so the migration is idempotent.
+3. **The old version is archived, never deleted.** Its units and topics remain in
+   the database, so the historical progress rows stay readable and auditable.
+
+Direct metadata edits inside a published version (title, estimate, difficulty)
+are allowed because they do not move a topic's identity. Deleting a unit or topic
+that students have progress on is refused with 409 plus an impact count unless the
+caller repeats the request with `force=true`.
+
+Evidence in the transcript below: step 7 shows Aarav at 13/29 completed topics
+(44.83 %) on course 1; step 7c publishes revision v2 and reports
+`migrated_progress_rows: 24` with `archived_versions: [1]`; step 7d shows the
+identical 13/29 and 44.83 % against the new version. Step 15b re-runs the
+migration and creates 0 rows.
+
+### Admin routes registered (74)
+
+```
+GET     /api/v1/admin/dashboard
+GET     /api/v1/admin/students
+GET     /api/v1/admin/students/export
+GET     /api/v1/admin/students/<int:student_id>
+GET     /api/v1/admin/students/<int:student_id>/progress
+PATCH   /api/v1/admin/students/<int:student_id>/status
+POST    /api/v1/admin/students/<int:student_id>/password-reset
+POST    /api/v1/admin/students/bulk
+GET     /api/v1/admin/courses
+POST    /api/v1/admin/courses
+GET     /api/v1/admin/courses/<int:course_id>
+PATCH   /api/v1/admin/courses/<int:course_id>
+DELETE  /api/v1/admin/courses/<int:course_id>
+POST    /api/v1/admin/courses/<int:course_id>/publish
+POST    /api/v1/admin/courses/<int:course_id>/unpublish
+GET     /api/v1/admin/courses/<int:course_id>/preview
+GET     /api/v1/admin/courses/<int:course_id>/enrollments
+GET     /api/v1/admin/courses/<int:course_id>/subjects
+POST    /api/v1/admin/courses/<int:course_id>/subjects
+DELETE  /api/v1/admin/courses/<int:course_id>/subjects/<int:subject_id>
+PATCH   /api/v1/admin/courses/<int:course_id>/subjects/reorder
+GET     /api/v1/admin/subjects
+POST    /api/v1/admin/subjects
+GET     /api/v1/admin/subjects/<int:subject_id>
+PATCH   /api/v1/admin/subjects/<int:subject_id>
+DELETE  /api/v1/admin/subjects/<int:subject_id>
+GET     /api/v1/admin/subjects/<int:subject_id>/units
+PATCH   /api/v1/admin/subjects/reorder
+GET     /api/v1/admin/syllabus
+POST    /api/v1/admin/syllabus
+PATCH   /api/v1/admin/syllabus/<int:item_id>
+DELETE  /api/v1/admin/syllabus/<int:item_id>
+PATCH   /api/v1/admin/syllabus/reorder
+GET     /api/v1/admin/syllabus/preview
+GET     /api/v1/admin/syllabus/versions
+POST    /api/v1/admin/syllabus/versions
+PATCH   /api/v1/admin/syllabus/versions/<int:version_id>
+POST    /api/v1/admin/syllabus/versions/<int:version_id>/publish
+POST    /api/v1/admin/syllabus/versions/<int:version_id>/migrate-progress
+GET     /api/v1/admin/syllabus/versions/<int:version_id>/impact
+POST    /api/v1/admin/syllabus/import
+GET     /api/v1/admin/syllabus/import/template
+GET     /api/v1/admin/resources
+POST    /api/v1/admin/resources
+GET     /api/v1/admin/resources/<int:resource_id>
+PATCH   /api/v1/admin/resources/<int:resource_id>
+DELETE  /api/v1/admin/resources/<int:resource_id>
+GET     /api/v1/admin/resources/<int:resource_id>/file
+POST    /api/v1/admin/resources/<int:resource_id>/publish
+POST    /api/v1/admin/resources/<int:resource_id>/unpublish
+GET     /api/v1/admin/resources/storage
+GET     /api/v1/admin/announcements
+POST    /api/v1/admin/announcements
+GET     /api/v1/admin/announcements/<int:announcement_id>
+PATCH   /api/v1/admin/announcements/<int:announcement_id>
+DELETE  /api/v1/admin/announcements/<int:announcement_id>
+POST    /api/v1/admin/announcements/<int:announcement_id>/publish
+POST    /api/v1/admin/announcements/<int:announcement_id>/expire
+GET     /api/v1/admin/announcements/<int:announcement_id>/recipients
+GET     /api/v1/admin/reports
+GET     /api/v1/admin/reports/summary
+GET     /api/v1/admin/reports/export
+GET     /api/v1/admin/audit-logs
+GET     /api/v1/admin/profile
+PATCH   /api/v1/admin/profile
+POST    /api/v1/admin/profile/password
+GET     /api/v1/admin/settings
+PATCH   /api/v1/admin/settings
+GET     /api/v1/admin/admins
+POST    /api/v1/admin/admins
+PATCH   /api/v1/admin/admins/<int:admin_id>
+POST    /api/v1/admin/admins/<int:admin_id>/password-reset
+POST    /api/v1/admin/admins/<int:admin_id>/resend-verification
+GET     /api/v1/admin/health
+```
+
+### curl evidence
+
+`$B` = `http://127.0.0.1:5000/api/v1`. `$ADMIN` / `$STUDENT` are the access tokens
+of the seeded admin (`admin@studyplanner.test`) and a seeded student
+(`aarav@studyplanner.test`). Scripts: `bash /tmp/verify_admin.sh`,
+`bash /tmp/verify_admin2.sh`. Long bodies are truncated where marked; everything
+else is the verbatim response, followed by the HTTP status.
+
+```
+admin token length: 415   student token length: 417
+
+### 1. Admin dashboard statistics
+$ curl -s "$B/admin/dashboard?from=2026-10-01&to=2026-10-24" -H "Authorization: Bearer $ADMIN"
+{
+    "activity": [
+        {
+            "active_students": 0,
+            "date": "2026-10-01",
+            "focus_minutes": 0,
+            "focus_sessions": 0,
+            "session_minutes": 0,
+            "sessions": 0,
+            "topics_completed": 0
+        },
+        {
+            "active_students": 0,
+            "date": "2026-10-02",
+            "focus_minutes": 0,
+            "focus_sessions": 0,
+            "session_minutes": 0,
+            "sessions": 0,
+            "topics_completed": 2
+        },
+        {
+            "active_students": 0,
+            "date": "2026-10-03",
+            "focus_minutes": 0,
+            "focus_sessions": 0,
+            "session_minutes": 0,
+            "sessions": 0,
+            "topics_completed": 2
+        },
+        {
+            "active_students": 3,
+            "date": "2026-10-04",
+            "focus_minutes": 200,
+            "focus_sessions": 5,
+            "session_minutes": 315,
+            "sessions": 5,
+            "topics_completed": 0
+        },
+        {
+            "active_students": 3,
+... (435 more lines truncated)
+HTTP 200
+### 2. Students: search 'priya' + pagination
+$ curl -s "$B/admin/students?q=priya&page=1&per_page=2" -H "Authorization: Bearer $ADMIN"
+{
+    "filters": {
+        "course_id": null,
+        "q": "priya",
+        "status": null
+    },
+    "has_next": false,
+    "has_prev": false,
+    "items": [
+        {
+            "avatar_url": null,
+            "completed_topics": 12,
+            "created_at": "2026-10-24T16:22:04.703608",
+            "email": "priya@studyplanner.test",
+            "email_verified": true,
+            "enrollment_count": 2,
+            "full_name": "Priya Verma",
+            "id": 3,
+            "last_login_at": null,
+            "role": "student",
+            "status": "active",
+            "timezone": "Asia/Kolkata"
+        }
+    ],
+    "page": 1,
+    "pages": 1,
+    "per_page": 2,
+    "total": 1
+}
+
+HTTP 200
+
+### 2b. Students: page 2 of all students, per_page=2
+$ curl -s "$B/admin/students?page=2&per_page=2&sort=email" -H "Authorization: Bearer $ADMIN"
+{
+    "filters": {
+        "course_id": null,
+        "q": null,
+        "status": null
+    },
+    "has_next": false,
+    "has_prev": true,
+    "items": [
+        {
+            "avatar_url": null,
+            "completed_topics": 7,
+            "created_at": "2026-10-24T16:22:05.248685",
+            "email": "rohan@studyplanner.test",
+            "email_verified": true,
+            "enrollment_count": 2,
+            "full_name": "Rohan Iyer",
+            "id": 4,
+            "last_login_at": null,
+            "role": "student",
+            "status": "active",
+            "timezone": "Asia/Kolkata"
+        }
+    ],
+    "page": 2,
+    "pages": 2,
+    "per_page": 2,
+    "total": 3
+}
+
+HTTP 200
+
+### 2c. Student detail with activity (no private content)
+$ curl -s $B/admin/students/3 -H "Authorization: Bearer $ADMIN"
+{
+    "account": {
+        "created_at": "2026-10-24T16:22:04.703608",
+        "daily_target_minutes": 240,
+        "email_verified": true,
+        "last_login_at": null,
+        "status": "active",
+        "timezone": "Asia/Kolkata"
+    },
+    "activity": {
+        "active_goals": 4,
+        "focus_minutes": 1225,
+        "focus_sessions": 23,
+        "planned_minutes": 2270,
+        "private_uploads": 0,
+        "studied_minutes": 1300,
+        "study_sessions": 36,
+        "tasks_by_status": {
+            "completed": 2,
+            "in_progress": 1,
+            "pending": 5
+        },
+        "unread_notifications": 2,
+        "window_days": 30
+    },
+    "enrollments": [
+        {
+            "course_id": 3,
+            "course_title": "SSC CGL \u2014 Tier I Foundation",
+            "difficulty": "medium",
+            "enrolled_at": "2026-10-24T16:22:05.649662",
+            "id": 4,
+            "last_accessed_at": "2026-10-24T09:22:05.649259",
+            "priority": "medium",
+            "progress": {
+                "completed_topics": 4,
+                "completion_percent": 28.57,
+                "estimated_minutes": 870,
+                "in_progress_topics": 2,
+                "not_started_topics": 8,
+... (60 more lines truncated)
+HTTP 200
+### 3. Suspend student 3
+$ curl -s -X PATCH $B/admin/students/3/status -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" -d "{\"status\":\"suspended\",\"reason\":\"Verification check\"}"
+{
+    "changed": true,
+    "message": "Account status changed from active to suspended.",
+    "previous_status": "active",
+    "student": {
+        "avatar_url": null,
+        "completed_topics": 0,
+        "created_at": "2026-10-24T16:22:04.703608",
+        "email": "priya@studyplanner.test",
+        "email_verified": true,
+        "enrollment_count": 0,
+        "full_name": "Priya Verma",
+        "id": 3,
+        "last_login_at": null,
+        "role": "student",
+        "status": "suspended",
+        "timezone": "Asia/Kolkata"
+    }
+}
+
+HTTP 200
+
+### 3b. Suspended student's own token is now rejected
+$ curl -s $B/student/dashboard -H "Authorization: Bearer $PRIYA"
+{
+    "error": {
+        "code": "INVALID_TOKEN",
+        "message": "The token is invalid: Bad Authorization header. Expected 'Authorization: Bearer <JWT>'"
+    }
+}
+
+HTTP 401
+
+### 3c. Activate student 3 again
+$ curl -s -X PATCH $B/admin/students/3/status -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" -d "{\"status\":\"active\"}"
+{
+    "changed": true,
+    "message": "Account status changed from suspended to active.",
+    "previous_status": "suspended",
+    "student": {
+        "avatar_url": null,
+        "completed_topics": 0,
+        "created_at": "2026-10-24T16:22:04.703608",
+        "email": "priya@studyplanner.test",
+        "email_verified": true,
+        "enrollment_count": 0,
+        "full_name": "Priya Verma",
+        "id": 3,
+        "last_login_at": null,
+        "role": "student",
+        "status": "active",
+        "timezone": "Asia/Kolkata"
+    }
+}
+
+HTTP 200
+
+### 4. Create a course
+$ curl -s -X POST $B/admin/courses -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" -d @course.json
+{
+    "course": {
+        "active_enrollment_count": 0,
+        "category": "competitive_exam",
+        "created_at": "2026-10-24T16:24:53.819248",
+        "created_by": 1,
+        "created_by_email": "admin@studyplanner.test",
+        "description": "Bihar Public Service Commission prelims and mains preparation.",
+        "enrollment_count": 0,
+        "estimated_duration_weeks": 36,
+        "id": 4,
+        "level": "Advanced",
+        "slug": "bpsc-combined-competitive-exam",
+        "status": "draft",
+        "subject_count": 0,
+        "syllabus_version_count": 0,
+        "target_audience": "BPSC aspirants",
+        "thumbnail_url": null,
+        "title": "BPSC Combined Competitive Exam",
+        "topic_count": 0,
+        "updated_at": "2026-10-24T16:24:53.819260"
+    }
+}
+
+new course id = 4
+
+### 4b. Publish the course
+$ curl -s -X POST $B/admin/courses/$COURSE_ID/publish -H "Authorization: Bearer $ADMIN"
+{
+    "changed": true,
+    "course": {
+        "active_enrollment_count": 0,
+        "category": "competitive_exam",
+        "created_at": "2026-10-24T16:24:53.819248",
+        "created_by": 1,
+        "created_by_email": "admin@studyplanner.test",
+        "description": "Bihar Public Service Commission prelims and mains preparation.",
+        "enrollment_count": 0,
+        "estimated_duration_weeks": 36,
+        "id": 4,
+        "level": "Advanced",
+        "slug": "bpsc-combined-competitive-exam",
+        "status": "published",
+        "subject_count": 0,
+        "syllabus_version_count": 0,
+        "target_audience": "BPSC aspirants",
+        "thumbnail_url": null,
+        "title": "BPSC Combined Competitive Exam",
+        "topic_count": 0,
+        "updated_at": "2026-10-24T16:24:54.045424"
+    },
+    "previous_status": "draft",
+    "published_syllabus_version": null,
+    "warning": "This course has no published syllabus version yet."
+}
+
+HTTP 200
+
+### 4c. Archiving a course with active enrollments is refused (409) without confirm
+$ curl -s -X DELETE $B/admin/courses/1 -H "Authorization: Bearer $ADMIN"
+{
+    "error": {
+        "code": "CONFLICT",
+        "impact": {
+            "active_enrollments": 2,
+            "enrollments": 2,
+            "students_with_records": 2,
+            "topic_progress_preserved": true
+        },
+        "message": "2 student(s) are actively enrolled in 'UPSC Civil Services \u2014 Prelims'. Repeat the request with confirm=true to archive it. Existing enrollments and topic progress are preserved.",
+        "requires_confirmation": true
+    }
+}
+
+HTTP 409
+
+### 5. Create a subject and link it to the new course
+$ curl -s -X POST $B/admin/subjects -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" -d @subject.json
+{
+    "subject": {
+        "course_count": 1,
+        "course_id": 4,
+        "course_weightage": 40.0,
+        "created_at": "2026-10-24T16:24:54.382183",
+        "description": "State specific general studies.",
+        "display_order": 0,
+        "id": 11,
+        "name": "Bihar General Studies",
+        "slug": "bihar-general-studies",
+        "status": "active",
+        "topic_count": 0,
+        "unit_count": 0,
+        "updated_at": "2026-10-24T16:24:54.382190",
+        "weightage": 40.0
+    }
+}
+
+### 5b. Create a draft syllabus version for the new course
+$ curl -s -X POST $B/admin/syllabus/versions -H "Authorization: Bearer $ADMIN" -d "{\"course_id\":$COURSE_ID,\"clone\":false}"
+{
+    "cloned": {
+        "cloned_from": null,
+        "topics": 0,
+        "units": 0
+    },
+    "message": "Draft version created. Students keep reading the published version until this draft is published.",
+    "version": {
+        "cloned_from_version_id": null,
+        "course_id": 4,
+        "created_at": "2026-10-24T16:24:54.566672",
+        "id": 4,
+        "notes": "First syllabus",
+        "published_at": null,
+        "status": "draft",
+        "topic_count": 0,
+        "unit_count": 0,
+        "version_number": 1
+    }
+}
+
+### 5c. Create a unit
+$ curl -s -X POST $B/admin/syllabus -H "Authorization: Bearer $ADMIN" -d @unit.json
+{
+    "kind": "unit",
+    "unit": {
+        "cloned_from_unit_id": null,
+        "created_at": "2026-10-24T16:24:54.738962",
+        "description": "Ancient to modern Bihar.",
+        "display_order": 0,
+        "id": 51,
+        "parent_id": null,
+        "subject_id": 11,
+        "subject_name": "Bihar General Studies",
+        "syllabus_version_id": 4,
+        "title": "Bihar History",
+        "topic_count": 0,
+        "unit_type": "unit",
+        "updated_at": "2026-10-24T16:24:54.738970"
+    }
+}
+
+### 5d. Create a chapter nested under the unit
+$ curl -s -X POST $B/admin/syllabus -H "Authorization: Bearer $ADMIN" -d @chapter.json
+{
+    "kind": "chapter",
+    "unit": {
+        "cloned_from_unit_id": null,
+        "created_at": "2026-10-24T16:24:54.933188",
+        "description": null,
+        "display_order": 0,
+        "id": 52,
+        "parent_id": 51,
+        "subject_id": 11,
+        "subject_name": "Bihar General Studies",
+        "syllabus_version_id": 4,
+        "title": "Magadha Empire",
+        "topic_count": 0,
+        "unit_type": "chapter",
+        "updated_at": "2026-10-24T16:24:54.933199"
+    }
+}
+
+### 5e. Create a topic under the chapter
+$ curl -s -X POST $B/admin/syllabus -H "Authorization: Bearer $ADMIN" -d @topic.json
+{
+    "kind": "topic",
+    "topic": {
+        "cloned_from_topic_id": null,
+        "created_at": "2026-10-24T16:24:55.109802",
+        "description": null,
+        "difficulty": "medium",
+        "display_order": 0,
+        "estimated_minutes": 75,
+        "id": 71,
+        "importance": "high",
+        "title": "Rise of Magadha",
+        "unit_id": 52,
+        "updated_at": "2026-10-24T16:24:55.109810"
+    }
+}
+
+HTTP 201
+
+### 5f. Reorder: move the topic to position 5
+$ curl -s -X PATCH $B/admin/syllabus/reorder -H "Authorization: Bearer $ADMIN" -d @reorder.json
+{
+    "ids": [
+        51
+    ],
+    "kind": "unit",
+    "updated": 1
+}
+
+HTTP 200
+
+### 6. CSV bulk import (3 good rows, 3 deliberately broken rows)
+$ cat /tmp/syllabus-import.csv
+subject,unit,chapter,topic,estimated_minutes,difficulty,importance,description
+Bihar General Studies,Bihar Geography,Rivers,Ganga basin in Bihar,60,medium,high,Course and tributaries
+Bihar General Studies,Bihar Geography,Rivers,Kosi flood plains,45,hard,high,Flood management
+Bihar General Studies,Bihar Economy,,Agriculture profile,90,medium,medium,Crops and irrigation
+Bihar General Studies,Bihar Economy,,,30,easy,low,Missing topic title
+Bihar General Studies,Bihar Polity,Local Bodies,Panchayati Raj in Bihar,abc,medium,high,Bad minutes value
+Bihar General Studies,Bihar Polity,Local Bodies,Urban local bodies,50,extreme,high,Bad difficulty value
+
+### 6b. POST the CSV
+$ curl -s -X POST $B/admin/syllabus/import -H "Authorization: Bearer $ADMIN" -F "syllabus_version_id=$VERSION_ID" -F "file=@/tmp/syllabus-import.csv"
+{
+    "message": "Imported 3 topic(s) into draft version 1. Publish the version to roll it out to students.",
+    "report": {
+        "course_id": 4,
+        "course_title": "BPSC Combined Competitive Exam",
+        "created": {
+            "chapters": 1,
+            "subjects": 0,
+            "topics": 3,
+            "units": 2
+        },
+        "errors": [
+            {
+                "column": "topic",
+                "message": "Topic is required.",
+                "row": 5
+            },
+            {
+                "column": "estimated_minutes",
+                "message": "'abc' is not a number.",
+                "row": 6
+            },
+            {
+                "column": "difficulty",
+                "message": "Must be one of: easy, medium, hard.",
+                "row": 7
+            }
+        ],
+        "linked_subjects": 0,
+        "rows_read": 6,
+        "rows_rejected": 3,
+        "rows_valid": 3,
+        "syllabus_version_id": 4
+    },
+    "version": {
+        "cloned_from_version_id": null,
+        "course_id": 4,
+        "created_at": "2026-10-24T16:24:54.566672",
+        "id": 4,
+        "notes": "First syllabus",
+... (8 more lines truncated)
+HTTP 201
+### 6c. The resulting admin syllabus tree
+$ curl -s "$B/admin/syllabus?version_id=$VERSION_ID" -H "Authorization: Bearer $ADMIN"
+{
+    "course": {
+        "id": 4,
+        "slug": "bpsc-combined-competitive-exam",
+        "status": "published",
+        "title": "BPSC Combined Competitive Exam"
+    },
+    "student_impact": {
+        "progress_rows": 0,
+        "students": 0,
+        "topics": 4
+    },
+    "subjects": [
+        {
+            "id": 11,
+            "name": "Bihar General Studies",
+            "slug": "bihar-general-studies",
+            "status": "active",
+            "units": [
+                {
+                    "children": [
+                        {
+                            "children": [],
+                            "cloned_from_unit_id": null,
+                            "created_at": "2026-10-24T16:24:54.933188",
+                            "description": null,
+                            "display_order": 0,
+                            "id": 52,
+                            "parent_id": 51,
+                            "subject_id": 11,
+                            "subject_name": "Bihar General Studies",
+                            "syllabus_version_id": 4,
+                            "title": "Magadha Empire",
+                            "topic_count": 1,
+                            "topics": [
+                                {
+                                    "cloned_from_topic_id": null,
+                                    "created_at": "2026-10-24T16:24:55.109802",
+                                    "description": null,
+                                    "difficulty": "medium",
+... (158 more lines truncated)
+HTTP 200
+### 6d. Publish the syllabus version
+$ curl -s -X POST $B/admin/syllabus/versions/$VERSION_ID/publish -H "Authorization: Bearer $ADMIN"
+{
+    "publication": {
+        "archived_versions": [],
+        "migrated_progress_rows": 0,
+        "note": "Progress rows were copied forward onto the new topics and the previous version was archived with its topics intact.",
+        "student_progress_preserved": true,
+        "topics": 4,
+        "version_id": 4,
+        "version_number": 1
+    },
+    "version": {
+        "cloned_from_version_id": null,
+        "course_id": 4,
+        "created_at": "2026-10-24T16:24:54.566672",
+        "id": 4,
+        "notes": "First syllabus",
+        "published_at": "2026-10-24T16:24:55.716325",
+        "status": "published",
+        "version_number": 1
+    }
+}
+
+HTTP 200
+
+### 7. Student progress on course 1 BEFORE a syllabus revision
+$ curl -s $B/admin/students/2/progress -H "Authorization: Bearer $ADMIN"
+{
+    "courses": [
+        {
+            "course_id": 1,
+            "course_title": "UPSC Civil Services \u2014 Prelims",
+            "progress": {
+                "completed_topics": 13,
+                "completion_percent": 44.83,
+                "estimated_minutes": 2295,
+                "in_progress_topics": 3,
+                "not_started_topics": 13,
+                "time_spent_minutes": 1213,
+                "total_topics": 29,
+                "weighted_completion_percent": 42.92
+            },
+            "target_completion_date": "2027-03-23"
+        },
+        {
+            "course_id": 2,
+            "course_title": "JEE Main \u2014 Physics, Chemistry & Mathematics",
+            "progress": {
+                "completed_topics": 12,
+                "completion_percent": 44.44,
+                "estimated_minutes": 2405,
+                "in_progress_topics": 3,
+                "not_started_topics": 12,
+                "time_spent_minutes": 1155,
+                "total_topics": 27,
+                "weighted_completion_percent": 44.07
+            },
+            "target_completion_date": "2027-05-22"
+        }
+    ],
+    "student_id": 2
+}
+
+HTTP 200
+
+### 7b. Clone course 1's published syllabus into a new draft version
+$ curl -s -X POST $B/admin/syllabus/versions -H "Authorization: Bearer $ADMIN" -d "{\"course_id\":1,\"notes\":\"2027 revision\"}"
+{
+    "cloned": {
+        "cloned_from": 1,
+        "topics": 29,
+        "units": 20
+    },
+    "message": "Draft version created. Students keep reading the published version until this draft is published.",
+    "version": {
+        "cloned_from_version_id": 1,
+        "course_id": 1,
+        "created_at": "2026-10-24T16:24:55.970333",
+        "id": 5,
+        "notes": "2027 revision",
+        "published_at": null,
+        "status": "draft",
+        "topic_count": 29,
+        "unit_count": 20,
+        "version_number": 2
+    }
+}
+
+### 7c. Publish the revision: progress rows are copied forward, old version archived
+$ curl -s -X POST $B/admin/syllabus/versions/$REV_ID/publish -H "Authorization: Bearer $ADMIN"
+{
+    "publication": {
+        "archived_versions": [
+            1
+        ],
+        "migrated_progress_rows": 24,
+        "note": "Progress rows were copied forward onto the new topics and the previous version was archived with its topics intact.",
+        "student_progress_preserved": true,
+        "topics": 29,
+        "version_id": 5,
+        "version_number": 2
+    },
+    "version": {
+        "cloned_from_version_id": 1,
+        "course_id": 1,
+        "created_at": "2026-10-24T16:24:55.970333",
+        "id": 5,
+        "notes": "2027 revision",
+        "published_at": "2026-10-24T16:24:56.171418",
+        "status": "published",
+        "version_number": 2
+    }
+}
+
+HTTP 200
+
+### 7d. Same student, same progress, AFTER the revision
+$ curl -s $B/admin/students/2/progress -H "Authorization: Bearer $ADMIN"
+{
+    "courses": [
+        {
+            "course_id": 1,
+            "course_title": "UPSC Civil Services \u2014 Prelims",
+            "progress": {
+                "completed_topics": 13,
+                "completion_percent": 44.83,
+                "estimated_minutes": 2295,
+                "in_progress_topics": 3,
+                "not_started_topics": 13,
+                "time_spent_minutes": 1213,
+                "total_topics": 29,
+                "weighted_completion_percent": 42.92
+            },
+            "target_completion_date": "2027-03-23"
+        },
+        {
+            "course_id": 2,
+            "course_title": "JEE Main \u2014 Physics, Chemistry & Mathematics",
+            "progress": {
+                "completed_topics": 12,
+                "completion_percent": 44.44,
+                "estimated_minutes": 2405,
+                "in_progress_topics": 3,
+                "not_started_topics": 12,
+                "time_spent_minutes": 1155,
+                "total_topics": 27,
+                "weighted_completion_percent": 44.07
+            },
+            "target_completion_date": "2027-05-22"
+        }
+    ],
+    "student_id": 2
+}
+
+HTTP 200
+
+### 7e. Deleting a topic students have progress on is refused (409)
+$ curl -s -X DELETE "$B/admin/syllabus/1?kind=topic" -H "Authorization: Bearer $ADMIN"
+{
+    "error": {
+        "code": "CONFLICT",
+        "message": "This syllabus version is archived. Create a new draft version to make changes."
+    }
+}
+
+HTTP 409
+
+### 8. Upload a study material (multipart, published, enrolled_only)
+$ curl -s -X POST $B/admin/resources -H "Authorization: Bearer $ADMIN" -F "title=BPSC Bihar GS Notes" -F "resource_type=document" -F "status=published" -F "visibility=enrolled_only" -F "course_id=$COURSE_ID" -F "file=@/tmp/material.txt"
+{
+    "max_upload_mb": 20,
+    "notified_students": 0,
+    "resource": {
+        "course_id": 4,
+        "course_title": "BPSC Combined Competitive Exam",
+        "created_at": "2026-10-24T16:24:56.554352",
+        "description": null,
+        "download_count": 0,
+        "download_url": "/api/v1/admin/resources/10/file",
+        "external_url": null,
+        "file_size_bytes": 80,
+        "has_file": true,
+        "id": 10,
+        "last_accessed_at": null,
+        "mime_type": "text/plain",
+        "owner_id": null,
+        "resource_type": "document",
+        "status": "published",
+        "subject_id": null,
+        "subject_name": null,
+        "tags": [
+            "bpsc",
+            "notes"
+        ],
+        "title": "BPSC Bihar GS Notes",
+        "topic_id": null,
+        "topic_title": null,
+        "unit_id": null,
+        "unit_title": null,
+        "updated_at": "2026-10-24T16:24:56.554361",
+        "uploaded_by": 1,
+        "uploaded_by_email": "admin@studyplanner.test",
+        "visibility": "enrolled_only"
+    }
+}
+
+HTTP 201
+
+### 8b. Oversized / wrong file type is rejected
+$ curl -s -X POST $B/admin/resources -H "Authorization: Bearer $ADMIN" -F "title=Bad" -F "resource_type=image" -F "file=@/tmp/material.txt"
+{
+    "error": {
+        "code": "VALIDATION_ERROR",
+        "fields": {
+            "file": "A image resource accepts: jpeg, jpg, png."
+        },
+        "message": "The file does not match the selected resource type."
+    }
+}
+
+HTTP 422
+
+### 8c. Storage usage
+$ curl -s $B/admin/resources/storage -H "Authorization: Bearer $ADMIN"
+{
+    "allowed_extensions": [
+        "csv",
+        "doc",
+        "docx",
+        "jpeg",
+        "jpg",
+        "md",
+        "pdf",
+        "png",
+        "txt"
+    ],
+    "by_type": [
+        {
+            "bytes": 80,
+            "count": 1,
+            "resource_type": "document"
+        },
+        {
+            "bytes": 0,
+            "count": 3,
+            "resource_type": "link"
+        },
+        {
+            "bytes": 0,
+            "count": 3,
+            "resource_type": "practice_set"
+        },
+        {
+            "bytes": 0,
+            "count": 3,
+            "resource_type": "revision_sheet"
+        }
+    ],
+    "disk": {
+        "file_count": 3,
+        "root": "/home/abhi/Apps/Study planner/backend/uploads",
+        "total_bytes": 280
+    },
+    "failures": [],
+... (8 more lines truncated)
+HTTP 200
+### 9. Create + publish a course-targeted announcement (fans out to notifications)
+$ curl -s -X POST $B/admin/announcements -H "Authorization: Bearer $ADMIN" -d @announcement.json
+{
+    "announcement": {
+        "audience": "course",
+        "body": "The revised weekly timetable for UPSC Prelims is now available in your planner.",
+        "course_id": 1,
+        "course_title": "UPSC Civil Services \u2014 Prelims",
+        "created_at": "2026-10-24T16:24:56.963019",
+        "created_by": 1,
+        "created_by_email": "admin@studyplanner.test",
+        "delivery": {
+            "delivered": 2,
+            "read": 0,
+            "read_percent": 0.0,
+            "targeted": 2,
+            "view_count": 0
+        },
+        "expires_at": "2026-12-31T23:59:00",
+        "id": 3,
+        "publish_at": "2026-10-24T16:24:56.961626",
+        "status": "published",
+        "target_role": null,
+        "title": "UPSC prelims timetable published",
+        "updated_at": "2026-10-24T16:24:56.963024",
+        "view_count": 0
+    },
+    "fan_out": {
+        "notifications_created": 2,
+        "targeted": 2
+    }
+}
+
+HTTP 201
+
+### 9b. Role-targeted announcement
+$ curl -s -X POST $B/admin/announcements -H "Authorization: Bearer $ADMIN" -d @role-announcement.json
+{
+    "announcement": {
+        "audience": "role",
+        "body": "The planner will be read-only on Sunday 02:00-03:00 IST.",
+        "course_id": null,
+        "course_title": null,
+        "created_at": "2026-10-24T16:24:57.123121",
+        "created_by": 1,
+        "created_by_email": "admin@studyplanner.test",
+        "delivery": {
+            "delivered": 3,
+            "read": 0,
+            "read_percent": 0.0,
+            "targeted": 3,
+            "view_count": 0
+        },
+        "expires_at": null,
+        "id": 4,
+        "publish_at": "2026-10-24T16:24:57.122628",
+        "status": "published",
+        "target_role": "student",
+        "title": "Platform maintenance window",
+        "updated_at": "2026-10-24T16:24:57.123126",
+        "view_count": 0
+    },
+    "fan_out": {
+        "notifications_created": 3,
+        "targeted": 3
+    }
+}
+
+HTTP 201
+
+### 9c. Announcement list with delivery statistics
+$ curl -s "$B/admin/announcements?per_page=3" -H "Authorization: Bearer $ADMIN"
+{
+    "has_next": true,
+    "has_prev": false,
+    "items": [
+        {
+            "audience": "role",
+            "body": "The planner will be read-only on Sunday 02:00-03:00 IST.",
+            "course_id": null,
+            "course_title": null,
+            "created_at": "2026-10-24T16:24:57.123121",
+            "created_by": 1,
+            "created_by_email": "admin@studyplanner.test",
+            "delivery": {
+                "delivered": 3,
+                "read": 0,
+                "read_percent": 0.0,
+                "targeted": 3,
+                "view_count": 0
+            },
+            "expires_at": null,
+            "id": 4,
+            "publish_at": "2026-10-24T16:24:57.122628",
+            "status": "published",
+            "target_role": "student",
+            "title": "Platform maintenance window",
+            "updated_at": "2026-10-24T16:24:57.123126",
+            "view_count": 0
+        },
+        {
+            "audience": "course",
+            "body": "The revised weekly timetable for UPSC Prelims is now available in your planner.",
+            "course_id": 1,
+            "course_title": "UPSC Civil Services \u2014 Prelims",
+            "created_at": "2026-10-24T16:24:56.963019",
+            "created_by": 1,
+            "created_by_email": "admin@studyplanner.test",
+            "delivery": {
+                "delivered": 2,
+                "read": 0,
+                "read_percent": 0.0,
+... (45 more lines truncated)
+HTTP 200
+### 9d. The targeted student now sees it in their notification centre
+$ curl -s "$B/student/notifications?per_page=3" -H "Authorization: Bearer $STUDENT"
+{
+    "has_next": true,
+    "has_prev": false,
+    "items": [
+        {
+            "body": "Set your daily study target in Profile & Settings, enroll in a course and generate your first timetable from the planner.",
+            "created_at": "2026-10-24T16:24:57.524893",
+            "id": 23,
+            "is_read": false,
+            "link": "/app/notifications",
+            "read_at": null,
+            "title": "Welcome to Smart Study Planner",
+            "type": "announcement"
+        },
+        {
+            "body": "Version 1 of the syllabus is live. Your existing topic progress has been preserved.",
+            "created_at": "2026-10-24T16:24:57.519007",
+            "id": 22,
+            "is_read": false,
+            "link": "/app/notifications",
+            "read_at": null,
+            "title": "UPSC Civil Services \u2014 Prelims: revised syllabus published",
+            "type": "announcement"
+        },
+        {
+            "body": "Deadline 2026-10-26.",
+            "created_at": "2026-10-24T16:24:57.506648",
+            "id": 21,
+            "is_read": false,
+            "link": "/app/goals",
+            "read_at": null,
+            "title": "Goal deadline approaching: Study 25 hours this week",
+            "type": "goal_deadline"
+        }
+    ],
+    "page": 1,
+    "pages": 5,
+    "per_page": 3,
+    "total": 14,
+    "unread_count": 13
+... (4 more lines truncated)
+HTTP 200
+### 10. Report: registrations
+$ curl -s "$B/admin/reports?type=registrations&from=2026-10-18&to=2026-10-24" -H "Authorization: Bearer $ADMIN"
+{
+    "available_types": [
+        "registrations",
+        "active_users",
+        "enrollments",
+        "resources",
+        "engagement",
+        "progress",
+        "focus",
+        "notifications",
+        "accounts"
+    ],
+    "columns": [
+        "date",
+        "registrations",
+        "verified",
+        "cumulative"
+    ],
+    "filters": {
+        "course_id": null
+    },
+    "range": {
+        "days": 7,
+        "from": "2026-10-18",
+        "to": "2026-10-24"
+    },
+    "series": [
+        {
+            "cumulative": 0,
+            "date": "2026-10-18",
+            "registrations": 0,
+            "verified": 0
+        },
+        {
+            "cumulative": 0,
+            "date": "2026-10-19",
+            "registrations": 0,
+            "verified": 0
+        },
+        {
+... (40 more lines truncated)
+HTTP 200
+### 10b. Report: engagement by course
+$ curl -s "$B/admin/reports?type=engagement&from=2026-10-01&to=2026-10-24" -H "Authorization: Bearer $ADMIN"
+{
+    "available_types": [
+        "registrations",
+        "active_users",
+        "enrollments",
+        "resources",
+        "engagement",
+        "progress",
+        "focus",
+        "notifications",
+        "accounts"
+    ],
+    "columns": [
+        "course_id",
+        "course",
+        "enrolled_students",
+        "active_students",
+        "engagement_percent",
+        "sessions",
+        "studied_minutes",
+        "planned_minutes",
+        "plan_adherence_percent",
+        "focus_sessions",
+        "focus_minutes"
+    ],
+    "filters": {
+        "course_id": null
+    },
+    "range": {
+        "days": 24,
+        "from": "2026-10-01",
+        "to": "2026-10-24"
+    },
+    "series": [
+        {
+            "active_students": 2,
+            "course": "SSC CGL \u2014 Tier I Foundation",
+            "course_id": 3,
+            "engagement_percent": 100.0,
+            "enrolled_students": 2,
+... (58 more lines truncated)
+HTTP 200
+### 10c. Report: aggregate syllabus progress
+$ curl -s "$B/admin/reports?type=progress" -H "Authorization: Bearer $ADMIN"
+{
+    "available_types": [
+        "registrations",
+        "active_users",
+        "enrollments",
+        "resources",
+        "engagement",
+        "progress",
+        "focus",
+        "notifications",
+        "accounts"
+    ],
+    "columns": [
+        "course_id",
+        "course",
+        "subject_id",
+        "subject",
+        "topics",
+        "enrolled_students",
+        "completed_records",
+        "in_progress_records",
+        "expected_records",
+        "aggregate_completion_percent",
+        "time_spent_minutes"
+    ],
+    "filters": {
+        "course_id": null
+    },
+    "range": {
+        "days": 30,
+        "from": "2026-09-25",
+        "to": "2026-10-24"
+    },
+    "series": [
+        {
+            "aggregate_completion_percent": 0.0,
+            "completed_records": 0,
+            "course": "BPSC Combined Competitive Exam",
+            "course_id": 4,
+            "enrolled_students": 0,
+... (150 more lines truncated)
+HTTP 200
+### 10d. Report: accounts
+$ curl -s "$B/admin/reports?type=accounts&from=2026-10-01&to=2026-10-24" -H "Authorization: Bearer $ADMIN"
+{
+    "available_types": [
+        "registrations",
+        "active_users",
+        "enrollments",
+        "resources",
+        "engagement",
+        "progress",
+        "focus",
+        "notifications",
+        "accounts"
+    ],
+    "columns": [
+        "date",
+        "status_changes"
+    ],
+    "filters": {
+        "course_id": null
+    },
+    "range": {
+        "days": 24,
+        "from": "2026-10-01",
+        "to": "2026-10-24"
+    },
+    "series": [
+        {
+            "date": "2026-10-01",
+            "status_changes": 0
+        },
+        {
+            "date": "2026-10-02",
+            "status_changes": 0
+        },
+        {
+            "date": "2026-10-03",
+            "status_changes": 0
+        },
+        {
+            "date": "2026-10-04",
+            "status_changes": 0
+... (98 more lines truncated)
+HTTP 200
+### 10e. Report summary (all nine report types)
+$ curl -s "$B/admin/reports/summary?from=2026-10-01&to=2026-10-24" -H "Authorization: Bearer $ADMIN"
+{
+    "filters": {
+        "course_id": null
+    },
+    "range": {
+        "days": 24,
+        "from": "2026-10-01",
+        "to": "2026-10-24"
+    },
+    "summary": {
+        "accounts": {
+            "active": 3,
+            "admins": 1,
+            "pending_verification": 0,
+            "status_changes_in_range": 2,
+            "suspended": 0,
+            "total_students": 3,
+            "unverified": 0,
+            "verification_rate_percent": 100.0,
+            "verified": 3
+        },
+        "active_users": {
+            "monthly_active": 3,
+            "total_students": 3,
+            "unique_active_in_range": 3,
+            "weekly_active": 3
+        },
+        "engagement": {
+            "focus_minutes": 2900,
+            "planned_minutes": 4910,
+            "sessions": 80,
+            "studied_minutes": 3217
+        },
+        "enrollments": {
+            "active": 6,
+            "courses": 4,
+            "enrollments": 6,
+            "new_in_range": 6
+        },
+        "focus": {
+... (35 more lines truncated)
+HTTP 200
+### 10f. CSV export of the enrollments report
+$ curl -s -D- "$B/admin/reports/export?type=enrollments" -H "Authorization: Bearer $ADMIN"
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.9 Python/3.14.4
+Date: Sat, 24 Oct 2026 16:24:58 GMT
+Content-Disposition: attachment; filename="report-enrollments-2026-09-25-to-2026-10-24.csv"
+Content-Length: 315
+Content-Type: text/csv; charset=utf-8
+Access-Control-Allow-Origin: http://127.0.0.1:5173
+Access-Control-Expose-Headers: Content-Disposition
+Access-Control-Allow-Credentials: true
+Vary: Origin
+Connection: close
+
+course_id,course,course_status,enrollments,active,completed,dropped,new_in_range
+2,"JEE Main — Physics, Chemistry & Mathematics",published,2,2,0,0,2
+3,SSC CGL — Tier I Foundation,published,2,2,0,0,2
+1,UPSC Civil Services — Prelims,published,2,2,0,0,2
+4,BPSC Combined Competitive Exam,published,0,0,0,0,0
+
+### 10g. CSV export of the student directory
+$ curl -s "$B/admin/students/export" -H "Authorization: Bearer $ADMIN"
+id,full_name,email,status,email_verified,created_at,last_login_at,enrollment_count,completed_topics
+4,Rohan Iyer,rohan@studyplanner.test,active,yes,2026-10-24T16:22:05.248685,,2,12
+3,Priya Verma,priya@studyplanner.test,active,yes,2026-10-24T16:22:04.703608,,2,12
+2,Aarav Sharma,aarav@studyplanner.test,active,yes,2026-10-24T16:22:04.138152,2026-10-24T16:24:52.047077,2,38
+
+### 11. Audit log: the entries the actions above wrote
+$ curl -s "$B/admin/audit-logs?per_page=20" -H "Authorization: Bearer $ADMIN"
+{
+    "has_next": true,
+    "has_prev": false,
+    "items": [
+        {
+            "action": "student.exported",
+            "actor_email": "admin@studyplanner.test",
+            "actor_id": 1,
+            "created_at": "2026-10-24T16:24:58.421747",
+            "detail": {
+                "filters": {},
+                "rows": 3
+            },
+            "entity_id": null,
+            "entity_type": "user",
+            "id": 22,
+            "ip_address": "127.0.0.1"
+        },
+        {
+            "action": "report.exported",
+            "actor_email": "admin@studyplanner.test",
+            "actor_id": 1,
+            "created_at": "2026-10-24T16:24:58.385927",
+            "detail": {
+                "from": "2026-09-25",
+                "rows": 4,
+                "to": "2026-10-24",
+                "type": "enrollments"
+            },
+            "entity_id": null,
+            "entity_type": "report",
+            "id": 21,
+            "ip_address": "127.0.0.1"
+        },
+        {
+            "action": "announcement.published",
+            "actor_email": "admin@studyplanner.test",
+            "actor_id": 1,
+            "created_at": "2026-10-24T16:24:57.148540",
+            "detail": {
+... (300 more lines truncated)
+HTTP 200
+### 11b. Audit log filtered by action
+$ curl -s "$B/admin/audit-logs?action=syllabus&per_page=5" -H "Authorization: Bearer $ADMIN"
+{
+    "has_next": true,
+    "has_prev": false,
+    "items": [
+        {
+            "action": "syllabus.version_published",
+            "actor_email": "admin@studyplanner.test",
+            "actor_id": 1,
+            "created_at": "2026-10-24T16:24:56.173581",
+            "detail": {
+                "archived_versions": [
+                    1
+                ],
+                "migrated_progress_rows": 24,
+                "note": "Progress rows were copied forward onto the new topics and the previous version was archived with its topics intact.",
+                "student_progress_preserved": true,
+                "topics": 29,
+                "version_id": 5,
+                "version_number": 2
+            },
+            "entity_id": 5,
+            "entity_type": "syllabus_version",
+            "id": 15,
+            "ip_address": "127.0.0.1"
+        },
+        {
+            "action": "syllabus.version_created",
+            "actor_email": "admin@studyplanner.test",
+            "actor_id": 1,
+            "created_at": "2026-10-24T16:24:55.997358",
+            "detail": {
+                "cloned_from": 1,
+                "course_id": 1,
+                "topics": 29,
+                "units": 20,
+                "version": 2
+            },
+            "entity_id": 5,
+            "entity_type": "syllabus_version",
+            "id": 14,
+... (68 more lines truncated)
+HTTP 200
+=== AUTHORIZATION: student token and anonymous requests on admin endpoints ===
+GET  /api/v1/admin/dashboard                         student=403  anonymous=401
+GET  /api/v1/admin/students                          student=403  anonymous=401
+GET  /api/v1/admin/courses                           student=403  anonymous=401
+GET  /api/v1/admin/syllabus?course_id=1              student=403  anonymous=401
+GET  /api/v1/admin/resources                         student=403  anonymous=401
+GET  /api/v1/admin/announcements                     student=403  anonymous=401
+GET  /api/v1/admin/reports?type=registrations        student=403  anonymous=401
+GET  /api/v1/admin/audit-logs                        student=403  anonymous=401
+GET  /api/v1/admin/settings                          student=403  anonymous=401
+GET  /api/v1/admin/profile                           student=403  anonymous=401
+POST /api/v1/admin/courses                           student=403  anonymous=401
+POST /api/v1/admin/subjects                          student=403  anonymous=401
+POST /api/v1/admin/announcements                     student=403  anonymous=401
+POST /api/v1/admin/syllabus                          student=403  anonymous=401
+PATCH/api/v1/admin/students/3/status                 student=403  anonymous=401
+
+### 12b. Student token body on /admin/dashboard
+$ curl -s $B/admin/dashboard -H "Authorization: Bearer $STUDENT"
+{
+    "error": {
+        "code": "FORBIDDEN",
+        "message": "This endpoint requires the admin role."
+    }
+}
+
+HTTP 403
+
+### 12c. Student token body on /admin/students
+$ curl -s $B/admin/students -H "Authorization: Bearer $STUDENT"
+{
+    "error": {
+        "code": "FORBIDDEN",
+        "message": "This endpoint requires the admin role."
+    }
+}
+
+HTTP 403
+
+### 12d. Anonymous request on /admin/audit-logs
+$ curl -s $B/admin/audit-logs
+{
+    "error": {
+        "code": "UNAUTHORIZED",
+        "message": "Authentication is required. Send an Authorization: Bearer <token> header."
+    }
+}
+
+HTTP 401
+
+### 13. Platform settings
+$ curl -s $B/admin/settings -H "Authorization: Bearer $ADMIN"
+{
+    "editable_keys": [
+        "allowed_resource_types",
+        "course_categories",
+        "max_upload_mb",
+        "notification_defaults"
+    ],
+    "other_settings": [],
+    "runtime": {
+        "ai_provider_configured": false,
+        "allowed_upload_extensions": [
+            "csv",
+            "doc",
+            "docx",
+            "jpeg",
+            "jpg",
+            "md",
+            "pdf",
+            "png",
+            "txt"
+        ],
+        "environment": "development",
+        "max_upload_mb": 20,
+        "require_email_verification": false
+    },
+    "settings": {
+        "allowed_resource_types": {
+            "description": "Resource types administrators may upload.",
+            "key": "allowed_resource_types",
+            "updated_at": "2026-10-24T16:22:06.016409",
+            "updated_by": 1,
+            "value": [
+                "pdf",
+                "document",
+                "image",
+                "link",
+                "practice_set",
+                "revision_sheet",
+                "note"
+            ]
+... (39 more lines truncated)
+HTTP 200
+### 13b. Update a platform setting
+$ curl -s -X PATCH $B/admin/settings -H "Authorization: Bearer $ADMIN" -d "{\"max_upload_mb\":25}"
+{
+    "updated": {
+        "max_upload_mb": 25
+    }
+}
+
+HTTP 200
+
+### 13c. Admin health
+$ curl -s $B/admin/health -H "Authorization: Bearer $ADMIN"
+{
+    "ai_provider": "missing",
+    "db": "ok",
+    "environment": "development",
+    "storage": {
+        "file_count": 3,
+        "root": "/home/abhi/Apps/Study planner/backend/uploads",
+        "total_bytes": 280
+    }
+}
+
+HTTP 200
+
+=== done ===
+
+### 14. Deleting a LIVE topic that students have progress on is refused (409)
+$ curl -s -X DELETE "$B/admin/syllabus/102?kind=topic" -H "Authorization: Bearer $ADMIN"
+{
+    "error": {
+        "code": "CONFLICT",
+        "impact": {
+            "progress_rows": 2,
+            "students": 2,
+            "topics": 1
+        },
+        "message": "2 student(s) have progress on 'Writs and constitutional remedies'. Repeat with force=true to delete it and their progress rows.",
+        "requires_force": true
+    }
+}
+
+HTTP 409
+
+### 14b. Editing that topic's metadata is allowed and keeps progress
+$ curl -s -X PATCH $B/admin/syllabus/102 -H "Authorization: Bearer $ADMIN" -d "{\"kind\":\"topic\",\"title\":\"Writs and constitutional remedies (revised)\",\"estimated_minutes\":95}"
+{
+    "kind": "topic",
+    "progress_preserved": true,
+    "topic": {
+        "cloned_from_topic_id": 8,
+        "created_at": "2026-10-24T16:24:55.994459",
+        "description": "Writs and constitutional remedies \u2014 part of Fundamental Rights (Indian Polity).",
+        "difficulty": "hard",
+        "display_order": 2,
+        "estimated_minutes": 95,
+        "id": 102,
+        "importance": "high",
+        "title": "Writs and constitutional remedies (revised)",
+        "unit_id": 64,
+        "updated_at": "2026-10-24T16:28:38.087104"
+    }
+}
+
+HTTP 200
+
+### 14c. Version impact report before a major change
+$ curl -s $B/admin/syllabus/versions/5/impact -H "Authorization: Bearer $ADMIN"
+{
+    "enrollments": 2,
+    "guidance": "Create a new draft version and publish it instead of editing a published structure; publishing copies progress forward.",
+    "progress": {
+        "progress_rows": 24,
+        "students": 2,
+        "topics": 29
+    },
+    "version": {
+        "cloned_from_version_id": 1,
+        "course_id": 1,
+        "created_at": "2026-10-24T16:24:55.970333",
+        "id": 5,
+        "notes": "2027 revision",
+        "published_at": "2026-10-24T16:24:56.171418",
+        "status": "published",
+        "version_number": 2
+    }
+}
+
+HTTP 200
+
+### 14d. Bulk suspend then the audit trail it wrote
+$ curl -s -X POST $B/admin/students/bulk -H "Authorization: Bearer $ADMIN" -d "{\"ids\":[3,4],\"action\":\"suspend\",\"reason\":\"Bulk check\"}"
+{
+    "action": "suspend",
+    "not_found": 0,
+    "requested": 2,
+    "skipped": 0,
+    "status": "suspended",
+    "updated": 2,
+    "updated_ids": [
+        3,
+        4
+    ]
+}
+
+HTTP 200
+
+### 14e. Bulk activate again
+$ curl -s -X POST $B/admin/students/bulk -H "Authorization: Bearer $ADMIN" -d "{\"ids\":[3,4],\"action\":\"activate\"}"
+{
+    "action": "activate",
+    "not_found": 0,
+    "requested": 2,
+    "skipped": 0,
+    "status": "active",
+    "updated": 2,
+    "updated_ids": [
+        3,
+        4
+    ]
+}
+
+HTTP 200
+
+### 14f. Issue a password recovery token for a student (password never shown)
+$ curl -s -X POST $B/admin/students/3/password-reset -H "Authorization: Bearer $ADMIN"
+{
+    "dev_note": "No email provider is configured, so this token is returned for testing and also written to the server log.",
+    "expires_at": "2026-10-24T17:28:38.596668",
+    "message": "A password recovery token has been issued for priya@studyplanner.test. The password itself is never visible.",
+    "reset_token": "7mPATxaObfYYnzpeohI0qs7WZNe-2DV5OZatUuvDn0I"
+}
+
+HTTP 200
+
+### 14g. Student-facing published course list now includes the new course
+$ curl -s "$B/courses?q=BPSC" -H "Authorization: Bearer $ADMIN"
+{
+    "has_next": false,
+    "has_prev": false,
+    "items": [
+        {
+            "category": "competitive_exam",
+            "description": "Bihar Public Service Commission prelims and mains preparation.",
+            "estimated_duration_weeks": 36,
+            "id": 4,
+            "is_enrolled": false,
+            "level": "Advanced",
+            "progress_percent": null,
+            "slug": "bpsc-combined-competitive-exam",
+            "status": "published",
+            "subject_count": 1,
+            "thumbnail_url": null,
+            "title": "BPSC Combined Competitive Exam",
+            "topic_count": 4
+        }
+    ],
+    "page": 1,
+    "pages": 1,
+    "per_page": 20,
+    "total": 1
+}
+
+HTTP 200
+
+### 14h. Audit log, newest 12 entries
+$ curl -s "$B/admin/audit-logs?per_page=12" -H "Authorization: Bearer $ADMIN"
+{
+    "has_next": true,
+    "has_prev": false,
+    "items": [
+        {
+            "action": "student.password_reset_issued",
+            "actor_email": "admin@studyplanner.test",
+            "actor_id": 1,
+            "created_at": "2026-10-24T16:28:38.600025",
+            "detail": {
+                "email": "priya@studyplanner.test"
+            },
+            "entity_id": 3,
+            "entity_type": "user",
+            "id": 27,
+            "ip_address": "127.0.0.1"
+        },
+        {
+            "action": "student.bulk_status_changed",
+            "actor_email": "admin@studyplanner.test",
+            "actor_id": 1,
+            "created_at": "2026-10-24T16:28:38.470343",
+            "detail": {
+                "action": "activate",
+                "reason": null,
+                "requested": 2,
+                "status": "active",
+                "updated_ids": [
+                    3,
+                    4
+                ]
+            },
+            "entity_id": null,
+            "entity_type": "user",
+            "id": 26,
+            "ip_address": "127.0.0.1"
+        },
+        {
+            "action": "student.bulk_status_changed",
+            "actor_email": "admin@studyplanner.test",
+... (164 more lines truncated)
+HTTP 200
+### 14i. Distinct audit actions recorded during this build
+  announcement.created                     2
+  announcement.published                   2
+  course.created                           1
+  course.published                         1
+  report.exported                          1
+  resource.created                         1
+  seed.demo_data                           1
+  settings.updated                         1
+  student.bulk_status_changed              2
+  student.exported                         1
+  student.password_reset_issued            1
+  student.status_changed                   2
+  subject.created                          1
+  syllabus.imported                        1
+  syllabus.reordered                       1
+  syllabus.topic_created                   1
+  syllabus.topic_updated                   1
+  syllabus.unit_created                    2
+  syllabus.version_created                 2
+  syllabus.version_published               2
+
+=== done ===
+
+### 15. Expire an announcement
+$ curl -s -X POST $B/admin/announcements/3/expire -H "Authorization: Bearer $ADMIN"
+{
+    "announcement": {
+        "audience": "course",
+        "body": "The revised weekly timetable for UPSC Prelims is now available in your planner.",
+        "course_id": 1,
+        "course_title": "UPSC Civil Services \u2014 Prelims",
+        "created_at": "2026-10-24T16:24:56.963019",
+        "created_by": 1,
+        "created_by_email": "admin@studyplanner.test",
+        "delivery": {
+            "delivered": 2,
+            "read": 0,
+            "read_percent": 0.0,
+            "targeted": 2,
+            "view_count": 0
+        },
+        "expires_at": "2026-10-24T16:29:17.762997",
+        "id": 3,
+        "publish_at": "2026-10-24T16:24:56.961626",
+        "status": "archived",
+        "target_role": null,
+        "title": "UPSC prelims timetable published",
+        "updated_at": "2026-10-24T16:29:17.764580",
+        "view_count": 0
+    },
+    "message": "The announcement is no longer visible to students."
+}
+
+### 15b. Re-running the progress migration is idempotent
+$ curl -s -X POST $B/admin/syllabus/versions/5/migrate-progress -H "Authorization: Bearer $ADMIN"
+{
+    "created_progress_rows": 0,
+    "message": "Existing rows were left untouched; only missing progress rows were copied forward.",
+    "version_id": 5
+}
+
+### 15c. Stream an admin-managed file (headers only)
+$ curl -s -D- -o /dev/null $B/admin/resources/10/file -H "Authorization: Bearer $ADMIN"
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.9 Python/3.14.4
+Date: Sat, 24 Oct 2026 16:29:17 GMT
+Content-Disposition: attachment; filename="BPSC Bihar GS Notes.txt"
+Content-Type: text/plain; charset=utf-8
+Content-Length: 80
+Last-Modified: Sat, 24 Oct 2026 16:24:56 GMT
+Cache-Control: no-cache, max-age=0
+
+### 15d. A student private upload is NOT readable by an admin (403)
+$ curl -s $B/admin/resources/9/file -H "Authorization: Bearer $ADMIN"
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "This resource has no stored file."
+  }
+}
+
+HTTP 404
+
+student private upload id = 11
+
+### 15d. Admin GET /admin/resources/11 (metadata only, no download_url)
+{
+  "resource": {
+    "course_id": null,
+    "course_title": null,
+    "created_at": "2026-10-24T16:30:41.208844",
+    "description": null,
+    "download_count": 0,
+    "download_url": null,
+    "external_url": null,
+    "file_size_bytes": 26,
+    "has_file": true,
+    "id": 11,
+    "last_accessed_at": "2026-10-24T16:30:41.208083",
+    "mime_type": "text/plain",
+    "note": "This is a student's private upload. Metadata only; the file is not readable through the admin API.",
+    "owner_id": 2,
+    "resource_type": "note",
+    "status": "published",
+    "subject_id": null,
+    "subject_name": null,
+    "tags": [],
+    "title": "My private notes",
+    "topic_id": null,
+    "topic_title": null,
+    "unit_id": null,
+    "unit_title": null,
+    "updated_at": "2026-10-24T16:30:41.208849",
+    "uploaded_by": 2,
+    "uploaded_by_email": "aarav@studyplanner.test",
+    "visibility": "private"
+  }
+}
+
+HTTP 200
+
+### 15e. Admin GET /admin/resources/11/file must be 403
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "This is a student's private upload. Administrators may not open or edit it (PRD 3.10 / 2.3)."
+  }
+}
+
+HTTP 403
+
+### 15f. Admin PATCH on a student private upload must be 403
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "This is a student's private upload. Administrators may not open or edit it (PRD 3.10 / 2.3)."
+  }
+}
+
+HTTP 403
+```
+
+### Verification summary
+
+| Check | Result |
+|---|---|
+| Admin dashboard stats | 200, real counts: 3 students, 3 active, courses by status, 70 → 103 topics, enrollment distribution, 24-day activity + signup series, warnings, storage (step 1) |
+| Students list with search + pagination | 200, `q=priya` → 1 match; `page=2&per_page=2` → page 2 of 3 (steps 2, 2b) |
+| Student detail with activity | 200, enrollments + aggregate progress + 30-day activity, plus an explicit `privacy_note`; no topic notes, uploads or AI messages (step 2c) |
+| Suspend then activate a student | 200 + 200, audited as `student.status_changed`; the suspended student's own token was rejected in between (steps 3, 3b, 3c) |
+| Create a course and publish it | 201 then 200, `status: published`, audited as `course.created` / `course.published`; it then appeared in the student catalogue (steps 4, 4b, 14g) |
+| Archiving a course with active enrollments | 409 `CONFLICT` with `impact.active_enrollments: 2` and `requires_confirmation: true` (step 4c) |
+| Create subject / version / unit / chapter / topic | 201 ×5, chapter nested under the unit, topic under the chapter (steps 5–5e) |
+| Reorder | 200 (step 5f), plus `PATCH /admin/syllabus/reorder` for topics and `/courses/:id/subjects/reorder` for subjects |
+| CSV bulk import | 201, `rows_read: 6, rows_valid: 3, rows_rejected: 3`, per-row errors naming row **and** column (missing topic, `'abc' is not a number`, bad difficulty); 2 units + 1 chapter + 3 topics created (step 6b) |
+| Syllabus versioning preserves progress | v2 cloned 20 units / 29 topics; publishing reported `migrated_progress_rows: 24`, `archived_versions: [1]`; the student's 13/29 completed topics and 44.83 % were identical before and after (steps 7–7d); re-running the migration created 0 rows (step 15b) |
+| Deleting a topic students have progress on | 409 with `impact: {progress_rows: 2, students: 2}` and `requires_force: true` (step 14) |
+| Editing a live topic's metadata | 200, `progress_preserved: true` (step 14b) |
+| Study material upload | 201, stored under `uploads/admin/` with a randomised name, served only via `/admin/resources/:id/file` (steps 8, 15c) |
+| File type validation | 422 — a `.txt` rejected for `resource_type=image` (step 8b) |
+| Student private upload is off limits to admins | metadata 200 with `download_url: null`; `GET .../file` 403; `PATCH` 403 (steps 15d–15f) |
+| Announcement create + publish with fan-out | 201, course-targeted → `targeted: 2, notifications_created: 2`; role-targeted → `targeted: 3, notifications_created: 3`; the student saw it in `/student/notifications` (steps 9–9d) |
+| Announcement expire | 200, status `archived`, no longer visible to students (step 15) |
+| Reports | registrations, engagement, progress, accounts and the nine-type summary all 200 with aggregate series + totals (steps 10–10e) |
+| CSV exports | `/admin/reports/export` and `/admin/students/export` returned `text/csv` with `Content-Disposition: attachment` (steps 10f, 10g) |
+| Audit log | 27 rows, 20 distinct actions, searchable by `action` and paginated; every create / update / publish / suspend / import / export in this run is present (steps 11, 11b, 14h, 14i) |
+| **Student token on admin endpoints** | **403 `FORBIDDEN` on all 15 probed endpoints** (10 GET, 4 POST, 1 PATCH) — step 12 matrix, bodies in 12b/12c |
+| **Anonymous request on admin endpoints** | **401 `UNAUTHORIZED` on all 15** — step 12 matrix, body in 12d |
+| Platform settings | 200 read, 200 write with enum/range validation, audited as `settings.updated` (steps 13, 13b) |
+| Server log | no traceback, no exception, no 500 across the whole run |
+
+Distinct audit actions written during the verification run:
+
+```
+announcement.created            announcement.published
+course.created                  course.published
+report.exported                 resource.created
+settings.updated                student.bulk_status_changed
+student.exported                student.password_reset_issued
+student.status_changed          subject.created
+syllabus.imported               syllabus.reordered
+syllabus.topic_created          syllabus.topic_updated
+syllabus.unit_created           syllabus.version_created
+syllabus.version_published
+```

@@ -3,6 +3,13 @@
 Progress rows point at `topics`, and publishing a new `SyllabusVersion` never
 deletes topics, so student progress is never silently wiped by a syllabus edit
 (PRD 3.4 / 4.6).
+
+Structural edits happen on a **draft** version that is cloned from the version
+currently published. The clone records its lineage (`cloned_from_version_id`,
+`cloned_from_unit_id`, `cloned_from_topic_id`) so that publishing the draft can
+copy every student's `topic_progress` row forward onto the matching new topic,
+while the old version is archived with its topics — and therefore its progress
+rows — still intact.
 """
 
 from app.extensions import db
@@ -33,8 +40,16 @@ class SyllabusVersion(CreatedAtMixin, db.Model):
     status = db.Column(db.String(20), nullable=False, default="draft", index=True)
     notes = db.Column(db.Text, nullable=True)
     published_at = db.Column(db.DateTime, nullable=True)
+    cloned_from_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey("syllabus_versions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     course = db.relationship("Course", back_populates="syllabus_versions")
+    cloned_from = db.relationship(
+        "SyllabusVersion", remote_side=[id], foreign_keys=[cloned_from_version_id]
+    )
     units = db.relationship(
         "SyllabusUnit",
         back_populates="version",
@@ -83,6 +98,11 @@ class SyllabusUnit(TimestampMixin, db.Model):
     description = db.Column(db.Text, nullable=True)
     unit_type = db.Column(db.String(20), nullable=False, default="unit")
     display_order = db.Column(db.Integer, nullable=False, default=0)
+    cloned_from_unit_id = db.Column(
+        db.Integer,
+        db.ForeignKey("syllabus_units.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     version = db.relationship("SyllabusVersion", back_populates="units")
     subject = db.relationship("Subject", back_populates="units")
@@ -92,9 +112,13 @@ class SyllabusUnit(TimestampMixin, db.Model):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="SyllabusUnit.display_order",
+        foreign_keys=[parent_id],
     )
     parent = db.relationship(
-        "SyllabusUnit", back_populates="children", remote_side=[id]
+        "SyllabusUnit",
+        back_populates="children",
+        remote_side=[id],
+        foreign_keys=[parent_id],
     )
     topics = db.relationship(
         "Topic",
@@ -125,6 +149,9 @@ class Topic(TimestampMixin, db.Model):
     difficulty = db.Column(db.String(10), nullable=False, default="medium")
     importance = db.Column(db.String(10), nullable=False, default="medium")
     display_order = db.Column(db.Integer, nullable=False, default=0)
+    cloned_from_topic_id = db.Column(
+        db.Integer, db.ForeignKey("topics.id", ondelete="SET NULL"), nullable=True
+    )
 
     unit = db.relationship("SyllabusUnit", back_populates="topics")
     progress_records = db.relationship(

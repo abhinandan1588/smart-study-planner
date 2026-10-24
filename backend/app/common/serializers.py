@@ -338,6 +338,8 @@ def announcement_detail(announcement):
         "audience": announcement.audience,
         "course_id": announcement.course_id,
         "course_title": announcement.course.title if announcement.course else None,
+        "target_role": announcement.target_role,
+        "status": announcement.status,
         "publish_at": iso(announcement.publish_at),
         "expires_at": iso(announcement.expires_at),
         "created_at": iso(announcement.created_at),

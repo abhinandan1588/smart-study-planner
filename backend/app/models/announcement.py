@@ -3,7 +3,7 @@
 from app.extensions import db
 from app.models.mixins import TimestampMixin
 
-ANNOUNCEMENT_AUDIENCES = ("all", "course")
+ANNOUNCEMENT_AUDIENCES = ("all", "course", "role")
 ANNOUNCEMENT_STATUSES = ("draft", "scheduled", "published", "archived")
 
 
@@ -17,6 +17,8 @@ class Announcement(TimestampMixin, db.Model):
     course_id = db.Column(
         db.Integer, db.ForeignKey("courses.id", ondelete="CASCADE"), nullable=True
     )
+    # Required when audience == 'role'; targets every account with that role.
+    target_role = db.Column(db.String(20), nullable=True)
     status = db.Column(db.String(20), nullable=False, default="draft", index=True)
     publish_at = db.Column(db.DateTime, nullable=True)
     expires_at = db.Column(db.DateTime, nullable=True)
