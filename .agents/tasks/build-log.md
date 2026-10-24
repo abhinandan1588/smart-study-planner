@@ -6192,3 +6192,218 @@ step. No React warnings, no uncaught page errors, no failed requests.
 | Error rendering | backend message "The email address or password is incorrect." shown inline |
 | Mobile | bottom tab bar computes to `display: flex` at 390x844 |
 | Flask log | 0 tracebacks across the whole run |
+
+## frontend-student
+
+All eleven student navigation destinations from PRD §5 (plus the course, task and
+conversation sub-routes) now render real data from the real API. Every
+`PagePlaceholder` under `features/` except the admin pages is gone; no mock data,
+no TODO stubs.
+
+### Pages shipped and the endpoints each one calls
+
+| Route | Page | Endpoints |
+|---|---|---|
+| `/app/dashboard` | `student-dashboard/pages/DashboardPage.jsx` | `GET /student/dashboard` (greeting, date, today planned vs studied, task counts, daily-target ring, syllabus %, upcoming sessions, streak, focus minutes, active goals, upcoming deadlines, recent courses, announcements, unread count, continue-topic); quick actions `POST /student/tasks`, `POST /student/focus-sessions` |
+| `/app/courses` | `courses/pages/MyCoursesPage.jsx` | `GET /student/enrollments`, `PATCH /student/enrollments/:id`, `DELETE /student/enrollments/:id` |
+| `/app/courses/browse` | `courses/pages/BrowseCoursesPage.jsx` | `GET /courses?q=&category=&sort=&page=`, `GET /courses/categories`, `POST /student/enrollments` |
+| `/app/courses/:id` | `courses/pages/CourseDetailPage.jsx` | `GET /courses/:id`, `POST /student/enrollments`, `GET|DELETE /student/enrollments(/:id)` |
+| `/app/syllabus/:courseId` | `syllabus/pages/SyllabusPage.jsx` + `components/SyllabusTree.jsx`, `components/TopicDrawer.jsx` | `GET /student/enrollments`, `GET /student/courses/:id/syllabus?status=&priority=&subject_id=&due_before=&q=`, `PATCH /student/topics/:id/progress`, `GET /student/revisions` |
+| `/app/planner` | `planner/pages/TimetablePage.jsx` + `components/SessionDialog.jsx`, `components/GeneratorDialog.jsx` | `GET /student/study-sessions?view=week\|day&date=`, `POST /student/study-sessions(?force=true)`, `PATCH|DELETE /student/study-sessions/:id`, `POST /student/study-sessions/:id/attendance`, `POST /student/study-sessions/:id/reschedule`, `POST /student/timetable/generate`, `POST /student/timetable/generate/save` |
+| `/app/planner/tasks` | `planner/pages/TasksPage.jsx` + `components/TaskDialog.jsx` | `GET /student/tasks?status=&priority=&course_id=&due_from=&due_to=&q=&sort=&page=`, `POST /student/tasks`, `PATCH|DELETE /student/tasks/:id` |
+| `/app/focus` | `focus-timer/pages/FocusTimerPage.jsx` | `GET /student/focus-sessions/active` (refresh recovery), `POST /student/focus-sessions`, `PATCH /student/focus-sessions/:id` (pause/resume/complete/stop), `GET /student/focus-sessions`, `GET /student/focus-sessions/summary` |
+| `/app/goals` | `goals/pages/GoalsPage.jsx` | `GET /student/goals?status=`, `POST /student/goals`, `PATCH|DELETE /student/goals/:id`, `POST /student/goals/:id/progress`, `GET /student/achievements` |
+| `/app/analytics` | `analytics/pages/AnalyticsPage.jsx` | `GET /student/analytics?range=7d\|30d\|90d\|365d&course_id=`, `GET /student/analytics/summary?period=week\|month` |
+| `/app/assistant(/:id)` | `ai-assistant/pages/AssistantPage.jsx` + `components/MessageThread.jsx` | `GET /student/ai/status`, `GET|POST /student/ai/conversations`, `GET|DELETE /student/ai/conversations/:id`, `POST /student/ai/chat`, `POST /student/ai/quiz`, `POST /student/ai/flashcards`, `GET /student/ai/documents` |
+| `/app/materials` | `materials/pages/MaterialsPage.jsx` | `GET /student/resources?scope=&type=&course_id=&q=&page=`, `GET /student/resources/recent`, `GET /student/resources/:id`, `GET /student/resources/file/<token>`, `POST /student/resources` (multipart), `DELETE /student/resources/:id`, `POST /student/resources/:id/bookmark` |
+| `/app/notifications` | `notifications/pages/NotificationsPage.jsx` | `GET /student/notifications?is_read=&type=&page=`, `PATCH /student/notifications/:id/read`, `POST /student/notifications/read-all`, `DELETE /student/notifications/:id`, `GET /student/announcements` |
+| `/app/settings` | `settings/pages/ProfileSettingsPage.jsx` | `GET|PATCH /student/profile`, `POST /student/profile/password` |
+
+New shared modules: `components/charts/` (`LineChartCard`, `BarChartCard`,
+`DonutChartCard`, `ProgressListCard`, `HeatmapCalendar`, `ChartTooltip`) and
+`components/common/PageHeader.jsx` + `PageLoader.jsx`. No second styling system
+was introduced: every new file is plain CSS on the existing tokens with
+`sp-<block>__<element>` naming.
+
+### Notable implementation details
+
+- **Syllabus reconciliation.** A status click updates the tree optimistically,
+  then `PATCH /student/topics/:id/progress` returns `progress` plus a `rollup`
+  block (`chapter`/`unit`/`subject`/`course` + their ids) which is applied
+  immutably to the matching nodes; a failure restores the previous tree. Verified
+  the rollup shape against the live endpoint (see below). Topics hang off
+  *chapters nested in* `unit.children`, so the tree recurses.
+- **Overlap handling.** `SessionDialog` turns a 409 `SCHEDULE_CONFLICT` into a
+  list of the conflicting sessions with a "Schedule anyway" action that retries
+  with `?force=true`. The generator's save step surfaces the all-or-nothing 409
+  with each offending row so they can be dropped from the draft.
+- **Focus timer recovery.** `hooks/useFocusTimer.js` was rewritten to take the
+  server's `elapsed_seconds` as the baseline and add only locally elapsed
+  wall-clock time while running. The previous version computed `elapsed =
+  paused_accumulated_seconds` for a paused session, which was wrong.
+- **Charts.** `isAnimationActive={false}` on every Recharts series. The
+  `prefers-reduced-motion` rule in `styles/global.css` neutered react-smooth's
+  keyframes, which left the plots drawing axes with no geometry — caught in the
+  browser pass, not by the build.
+- **Uploads.** `MaterialsPage` mirrors the backend's `ALLOWED_UPLOAD_EXTENSIONS`,
+  per-type `TYPE_EXTENSIONS` map and 20 MB `MAX_UPLOAD_MB` as a client-side hint,
+  and renders the backend's own `fields.file` message verbatim when the server
+  rejects a file.
+- **AI.** No key, provider name or env var is referenced in frontend code. The
+  page branches on `ai_configured` from `GET /student/ai/status`, shows a
+  retrieval-only notice when generation is off, renders citations to retrieved
+  chunks, and reveals each answer progressively (the backend returns the whole
+  message in one response).
+- `vite.config.js` gained `manualChunks` for `recharts` and the React runtime so
+  the production build has no chunk-size warning.
+
+### Commands
+
+```
+cd "/home/abhi/Apps/Study planner/frontend" && npm run build
+cd "/home/abhi/Apps/Study planner/backend" && nohup .venv/bin/python -m flask --app run.py run > /tmp/flask.log 2>&1 &
+cd "/home/abhi/Apps/Study planner/frontend" && setsid nohup node node_modules/vite/bin/vite.js > /tmp/vite.log 2>&1 < /dev/null &
+```
+
+Flask was already listening on 5000 from the previous step; Vite reported
+`Port 5173 is in use, trying another one...` and bound **5174**, so every check
+below went through the 5174 proxy.
+
+### Build tail (exit 0, zero errors, zero warnings)
+
+```
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 827 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     1.13 kB │ gzip:   0.55 kB
+dist/assets/index-Bj_CTXdn.css     70.53 kB │ gzip:  11.04 kB
+dist/assets/react-P7IZ5rWM.js      51.62 kB │ gzip:  18.28 kB
+dist/assets/recharts-CJ3OxtLF.js  400.43 kB │ gzip: 115.44 kB
+dist/assets/index-N5rAGowP.js     487.75 kB │ gzip: 148.30 kB
+✓ built in 4.03s
+```
+
+### Browser verification (headless Chrome at /usr/bin/google-chrome)
+
+Driven with `puppeteer-core` installed **outside** the repo (`/tmp/pptr`, script
+`/tmp/pptr/smoke.mjs`) so no verification dependency entered `package.json`.
+Logged in through the real `/login` form as the seeded student
+`aarav@studyplanner.test`, then visited every student route. Console errors and
+warnings, uncaught exceptions, failed requests and any `/api/v1` response ≥ 400
+were all collected.
+
+```
+after login URL: http://127.0.0.1:5174/app/dashboard
+/app/dashboard         | Good evening, Aarav                | problems:0 | placeholder:0 | skeletons:0
+/app/courses           | My Courses                         | problems:0 | placeholder:0 | skeletons:0
+/app/courses/browse    | Browse courses                     | problems:0 | placeholder:0 | skeletons:0
+/app/courses/1         | UPSC Civil Services — Prelims      | problems:0 | placeholder:0 | skeletons:0
+/app/syllabus/1        | My Syllabus                        | problems:0 | placeholder:0 | skeletons:0
+/app/planner           | Timetable                          | problems:0 | placeholder:0 | skeletons:0
+/app/planner/tasks     | Tasks                              | problems:0 | placeholder:0 | skeletons:0
+/app/focus             | Focus Timer                        | problems:0 | placeholder:0 | skeletons:0
+/app/goals             | Goals & Achievements               | problems:0 | placeholder:0 | skeletons:0
+/app/analytics         | Progress Analytics                 | problems:0 | placeholder:0 | skeletons:0
+/app/assistant         | AI Study Assistant                 | problems:0 | placeholder:0 | skeletons:0
+/app/materials         | Study Materials                    | problems:0 | placeholder:0 | skeletons:0
+/app/notifications     | Notifications                      | problems:0 | placeholder:0 | skeletons:0
+/app/settings          | Profile & Settings                 | problems:0 | placeholder:0 | skeletons:0
+/app/dashboard @390px horizontal overflow: false
+/app/syllabus/1 @390px horizontal overflow: false
+--- problems (0) ---
+```
+
+`placeholder:0` = no `.sp-placeholder__endpoints` node on any page.
+`skeletons:0` = no skeleton left on screen after load, i.e. every page resolved
+its data rather than hanging in a loading state.
+
+Full-page screenshots were captured for all fourteen desktop routes plus two
+390 px mobile passes (`/tmp/screens/*.png`, summary in
+`/tmp/screens/report.json`); they are deliberately not committed (4.1 MB of
+PNGs). They were reviewed, and these were fixed as a result:
+
+| Found in screenshot | Fix |
+|---|---|
+| Every Recharts plot drew axes but no lines/bars/wedges | `isAnimationActive={false}` on Line, Bar and Pie |
+| `Indian Polity9 of 10 topics` — title and meta ran together | `.sp-syl__togglebody` made a flex column |
+| Chapters collapsed by default, so no topic rows were visible on load | `UnitBlock` opens to `depth <= 1` |
+| Session chip time wrapped onto two lines in the week grid | 11 px nowrap/ellipsis on `.sp-session__time` |
+| Focus chart Y axis showed bare numbers | `formatAxisValue` to `Nm` |
+| `GET /student/ai/status` `message` names the provider env vars | banner no longer renders the backend message; it uses its own wording and only branches on `ai_configured` |
+
+### Endpoint checks through the Vite proxy
+
+Every page's read endpoint, with the seeded student's bearer token:
+
+```
+GET /student/dashboard                 200     GET /student/analytics?range=30d        200
+GET /student/announcements              200     GET /student/analytics/summary          200
+GET /student/enrollments                200     GET /student/resources?scope=all        200
+GET /courses?page=1&per_page=3          200     GET /student/resources/recent           200
+GET /courses/categories                 200     GET /student/notifications?page=1       200
+GET /courses/1                          200     GET /student/notifications/unread-count 200
+GET /student/courses/1/syllabus         200     GET /student/profile                    200
+GET /student/revisions                  200     GET /student/ai/status                  200
+GET /student/study-sessions?view=week   200     GET /student/ai/conversations           200
+GET /student/tasks?status=pending,...   200     GET /student/ai/documents               200
+GET /student/focus-sessions/active      200     GET /student/focus-sessions/summary     200
+GET /student/focus-sessions             200     GET /student/goals, /student/achievements 200
+```
+
+Mutating flows each page performs:
+
+```
+PATCH /student/topics/75/progress        200  rollup keys: chapter, chapter_id, course, course_id,
+                                              subject, subject_id, unit, unit_id
+                                              course 41.38% / subject 90.0%
+POST  /student/tasks                     201  (recurrence_rule: daily)
+PATCH /student/tasks/25 {completed}      200  returns next_occurrence
+DELETE /student/tasks/25                 204
+POST  /student/study-sessions            201
+POST  /student/study-sessions (overlap)  409  SCHEDULE_CONFLICT + conflicting session
+POST  /student/study-sessions?force=true 201  echoes forced_over_conflicts
+POST  .../:id/attendance {attended}      200  status -> partially_completed, actual 45m
+DELETE /student/study-sessions/:id        204
+POST  /student/timetable/generate        200  10 study blocks, 10 breaks, 366 planned minutes,
+                                              61 unscheduled, persisted: false
+POST  /student/timetable/generate/save   201  created: 4
+POST  .../generate/save (replay)         409  SCHEDULE_CONFLICT with index + title per row
+POST  /student/focus-sessions            201  server-set started_at
+GET   /student/focus-sessions/active     200  elapsed_seconds 0, remaining 2700 (refresh recovery)
+PATCH .../:id pause|resume|stop          200  each
+POST  /student/focus-sessions (2nd)      409  FOCUS_SESSION_ACTIVE + the running session
+POST  /student/goals                     201  PATCH 200, DELETE 204
+POST  /student/resources/13/bookmark     201  toggled off again -> 200
+GET   /student/resources/file/<token>    200  streamed "PDF document, version 1.4, 1 page(s)"
+PATCH /student/notifications/24/read     200  POST read-all -> updated 13, unread 0
+PATCH /student/profile                   200  daily_target + 7-day availability persisted
+POST  /student/profile/password (wrong)  422  field error on current_password, rendered inline
+POST  /student/ai/chat                   200  ai_configured false, 1 source cited, offline answer
+POST  /student/ai/quiz                   503  AI_NOT_CONFIGURED, surfaced as a toast, page intact
+```
+
+SPA history fallback: all 15 student paths return 200 from Vite.
+`/tmp/vite.log` shows only the ready banner and the recharts dep-optimise line;
+`/tmp/flask.log` shows no tracebacks for the whole run.
+
+Verification data written during the checks was cleaned up afterwards (test
+tasks and their recurrence child, the forced-overlap sessions, the saved
+generated batch, the goal), and the demo student's seeded availability and
+300-minute daily target were restored.
+
+### Not verified
+
+- No automated frontend test suite was added (the brief rules one out), so these
+  pages have no unit or component tests.
+- Accessibility was checked only mechanically: keyboard-reachable controls,
+  `aria-*` wiring on the shared components, visible `--ring` focus styles, token
+  contrast and no horizontal overflow at 390 px. Full WCAG conformance needs
+  manual assistive-technology testing and an expert review.
+- Generated AI answers were exercised only in the no-provider path, since no
+  `AI_API_KEY` is configured on this machine. The configured path (live provider,
+  quiz, flashcards) is coded against the documented contract but was not run.
+- Browser push notifications are requested through the standard `Notification`
+  API when a focus session starts; headless Chrome cannot grant that permission,
+  so only the in-app toast path was observed.

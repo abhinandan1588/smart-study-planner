@@ -1,0 +1,122 @@
+/* Focus timer. The clock is rebuilt from the server's timestamps. */
+
+.sp-focus {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.sp-focus__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.sp-focus__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-6) 0 var(--sp-4);
+}
+
+.sp-focus__clock {
+  font-size: 56px;
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.sp-focus__clocklabel {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.sp-focus__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  justify-content: center;
+}
+
+.sp-focus__recovered {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--c-info-border);
+  background: var(--c-info-soft);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+
+.sp-focus__setup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+.sp-focus__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.sp-focus__preset {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-full);
+  background: var(--c-surface);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.sp-focus__preset[aria-pressed='true'] {
+  border-color: var(--c-primary);
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+  font-weight: var(--fw-semibold);
+}
+
+.sp-focus__historyrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.sp-focus__historyrow:last-child {
+  border-bottom: 0;
+}
+
+.sp-focus__break {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--c-success-border);
+  background: var(--c-success-soft);
+  border-radius: var(--r-md);
+}
+
+@media (max-width: 1024px) {
+  .sp-focus {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .sp-focus__setup {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sp-focus__clock {
+    font-size: 44px;
+  }
+}

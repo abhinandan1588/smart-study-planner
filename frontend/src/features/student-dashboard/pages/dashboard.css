@@ -1,0 +1,240 @@
+/* Student dashboard. Compact cards, no oversized metric tiles (PRD 9). */
+
+.sp-dash__greeting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+
+.sp-dash__date {
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+}
+
+.sp-dash__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.sp-dash__cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.sp-dash__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+/* --- Today card -------------------------------------------------------- */
+
+.sp-dash__today {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-6);
+}
+
+.sp-dash__todaystats {
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.sp-dash__statrow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+.sp-dash__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sp-dash__statlabel {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+.sp-dash__statvalue {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Compact list rows ------------------------------------------------- */
+
+.sp-dash__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-dash__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.sp-dash__item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sp-dash__item:first-child {
+  padding-top: 0;
+}
+
+.sp-dash__itembody {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sp-dash__itemtitle {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-dash__itemmeta {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+.sp-dash__itemaside {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.sp-dash__time {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+
+/* --- Goal rows --------------------------------------------------------- */
+
+.sp-dash__goal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.sp-dash__goal:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sp-dash__goal:first-child {
+  padding-top: 0;
+}
+
+.sp-dash__goalhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+/* --- Course rows ------------------------------------------------------- */
+
+.sp-dash__course {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+}
+
+.sp-dash__courses {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+.sp-dash__coursehead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+/* --- Announcements ----------------------------------------------------- */
+
+.sp-dash__announce {
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.sp-dash__announce:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sp-dash__announce:first-child {
+  padding-top: 0;
+}
+
+.sp-dash__announcetitle {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  margin-bottom: 2px;
+}
+
+.sp-dash__announcebody {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+  line-height: var(--lh-relaxed);
+}
+
+.sp-dash__continue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--c-primary-border);
+  background: var(--c-primary-soft);
+  border-radius: var(--r-md);
+}
+
+@media (max-width: 1024px) {
+  .sp-dash__cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .sp-dash__courses,
+  .sp-dash__statrow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sp-dash__quick {
+    width: 100%;
+  }
+}

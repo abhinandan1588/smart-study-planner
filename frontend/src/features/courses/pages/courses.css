@@ -1,0 +1,140 @@
+/* Course catalogue and enrolled-course cards. */
+
+.sp-courses__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+.sp-coursecard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: var(--sh-sm);
+  min-width: 0;
+}
+
+.sp-coursecard__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.sp-coursecard__title {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+}
+
+.sp-coursecard__desc {
+  font-size: var(--fs-sm);
+  color: var(--c-text-muted);
+  line-height: var(--lh-relaxed);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sp-coursecard__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+.sp-coursecard__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.sp-coursecard__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: auto;
+  padding-top: var(--sp-2);
+}
+
+.sp-courses__filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+  align-items: end;
+}
+
+/* --- Detail page -------------------------------------------------------- */
+
+.sp-coursedetail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.sp-coursedetail__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.sp-subjectrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.sp-subjectrow:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sp-subjectrow:first-child {
+  padding-top: 0;
+}
+
+.sp-deflist {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-2) var(--sp-4);
+  font-size: var(--fs-sm);
+  margin: 0;
+}
+
+.sp-deflist dt {
+  color: var(--c-text-muted);
+}
+
+.sp-deflist dd {
+  margin: 0;
+  font-weight: var(--fw-medium);
+}
+
+@media (max-width: 1024px) {
+  .sp-courses__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sp-coursedetail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .sp-courses__grid,
+  .sp-courses__filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

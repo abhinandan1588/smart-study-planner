@@ -1,0 +1,188 @@
+/* Chart cards. Recharts draws the plot; everything around it is tokens. */
+
+.sp-chart {
+  width: 100%;
+}
+
+.sp-chart__plot {
+  width: 100%;
+}
+
+.sp-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+.sp-chart__legenditem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.sp-chart__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
+/* --- Tooltip ----------------------------------------------------------- */
+
+.sp-charttip {
+  min-width: 140px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-md);
+  font-size: var(--fs-xs);
+}
+
+.sp-charttip__label {
+  font-weight: var(--fw-semibold);
+  color: var(--c-text);
+  margin-bottom: var(--sp-1);
+}
+
+.sp-charttip__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  color: var(--c-text-muted);
+}
+
+.sp-charttip__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.sp-charttip__value {
+  font-weight: var(--fw-semibold);
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Donut centre ------------------------------------------------------ */
+
+.sp-donut {
+  position: relative;
+}
+
+.sp-donut__centre {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.sp-donut__value {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  line-height: 1.1;
+}
+
+.sp-donut__label {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+/* --- Heatmap (CSS grid, not Recharts) ---------------------------------- */
+
+.sp-heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.sp-heatmap__grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 14px);
+  gap: 3px;
+  overflow-x: auto;
+  padding-bottom: var(--sp-1);
+}
+
+.sp-heatmap__cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(16, 24, 40, 0.04);
+  background: var(--c-surface-alt);
+  padding: 0;
+  cursor: default;
+}
+
+.sp-heatmap__cell--l1 {
+  background: #dbeafe;
+}
+.sp-heatmap__cell--l2 {
+  background: #93c5fd;
+}
+.sp-heatmap__cell--l3 {
+  background: #3b82f6;
+}
+.sp-heatmap__cell--l4 {
+  background: #1d4ed8;
+}
+
+.sp-heatmap__cell--empty {
+  background: transparent;
+  border-color: transparent;
+}
+
+.sp-heatmap__scale {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+.sp-heatmap__months {
+  display: flex;
+  gap: var(--sp-4);
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+/* --- Progress list (syllabus completion by course) --------------------- */
+
+.sp-progresslist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.sp-progresslist__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.sp-progresslist__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.sp-progresslist__title {
+  font-weight: var(--fw-medium);
+  font-size: var(--fs-sm);
+}
+
+.sp-progresslist__meta {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}

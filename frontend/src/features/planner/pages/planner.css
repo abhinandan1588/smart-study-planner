@@ -1,0 +1,283 @@
+/* Timetable + tasks. */
+
+.sp-plan__filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-3);
+  align-items: end;
+}
+
+.sp-plan__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  justify-content: space-between;
+}
+
+.sp-plan__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.sp-plan__range {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  min-width: 190px;
+  text-align: center;
+}
+
+/* --- Week grid --------------------------------------------------------- */
+
+.sp-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+
+.sp-week__day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-height: 150px;
+  padding: var(--sp-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface-alt);
+  min-width: 0;
+}
+
+.sp-week__day.is-today {
+  border-color: var(--c-primary-border);
+  background: var(--c-primary-soft);
+}
+
+.sp-week__dayhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.sp-week__dayname {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--c-text-muted);
+}
+
+.sp-week__daynum {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.sp-week__add {
+  margin-top: auto;
+}
+
+/* --- Session chip ------------------------------------------------------ */
+
+.sp-session {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--sp-2);
+  border: 1px solid var(--c-border);
+  border-left: 3px solid var(--c-chart-1);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  cursor: pointer;
+  font: inherit;
+}
+
+.sp-session:hover {
+  border-color: var(--c-border-strong);
+  box-shadow: var(--sh-sm);
+}
+
+.sp-session--revision {
+  border-left-color: var(--c-chart-4);
+}
+.sp-session--break {
+  border-left-color: var(--c-text-subtle);
+}
+.sp-session.is-completed {
+  border-left-color: var(--c-success);
+  background: var(--c-success-soft);
+}
+.sp-session.is-skipped {
+  border-left-color: var(--c-danger);
+  opacity: 0.75;
+}
+.sp-session.is-conflicted {
+  outline: 2px solid var(--c-danger);
+  outline-offset: 1px;
+}
+
+.sp-session__time {
+  display: block;
+  font-size: 11px;
+  color: var(--c-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-session__title {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-session__meta {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Day view ---------------------------------------------------------- */
+
+.sp-day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.sp-day__row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  gap: var(--sp-3);
+  align-items: center;
+  padding: var(--sp-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+}
+
+.sp-day__time {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-day__actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+/* --- Conflict banner --------------------------------------------------- */
+
+.sp-plan__alert {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--c-danger-border);
+  background: var(--c-danger-soft);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+
+.sp-plan__alert--info {
+  border-color: var(--c-info-border);
+  background: var(--c-info-soft);
+}
+
+/* --- Generator preview ------------------------------------------------- */
+
+.sp-gen__summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.sp-gen__preview {
+  max-height: 340px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+  background: var(--c-surface-alt);
+}
+
+.sp-gen__row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto auto;
+  gap: var(--sp-3);
+  align-items: center;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+}
+
+.sp-gen__unscheduled {
+  margin-top: var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+/* --- Task list --------------------------------------------------------- */
+
+.sp-task__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sp-task__name {
+  font-weight: var(--fw-medium);
+}
+
+.sp-task__name.is-done {
+  text-decoration: line-through;
+  color: var(--c-text-muted);
+}
+
+.sp-task__sub {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+.sp-task__rowactions {
+  display: flex;
+  gap: var(--sp-1);
+  justify-content: flex-end;
+}
+
+@media (max-width: 1024px) {
+  .sp-plan__filters,
+  .sp-gen__summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sp-week {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .sp-plan__filters,
+  .sp-gen__summary,
+  .sp-week {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sp-day__row,
+  .sp-gen__row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+  }
+}

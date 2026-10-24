@@ -32,5 +32,15 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        // Recharts is only needed by the analytics / dashboard charts, so it
+        // ships as its own chunk instead of inflating the main bundle.
+        manualChunks: {
+          recharts: ['recharts'],
+          react: ['react', 'react-dom', 'react-router-dom'],
+        },
+      },
+    },
   },
 });

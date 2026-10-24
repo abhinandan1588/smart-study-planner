@@ -1,0 +1,114 @@
+/* Goals and achievements. */
+
+.sp-goals__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+.sp-goalcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: var(--sh-sm);
+  min-width: 0;
+}
+
+.sp-goalcard__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.sp-goalcard__title {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+}
+
+.sp-goalcard__desc {
+  font-size: var(--fs-sm);
+  color: var(--c-text-muted);
+}
+
+.sp-goalcard__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+.sp-goalcard__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: auto;
+}
+
+/* --- Achievements gallery ---------------------------------------------- */
+
+.sp-ach__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--sp-3);
+}
+
+.sp-ach {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  min-width: 0;
+}
+
+.sp-ach--locked {
+  background: var(--c-surface-alt);
+  border-style: dashed;
+}
+
+.sp-ach__icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-full);
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+}
+
+.sp-ach--locked .sp-ach__icon {
+  background: var(--c-surface);
+  color: var(--c-text-subtle);
+}
+
+.sp-ach__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sp-ach__title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.sp-ach__meta {
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+}
+
+@media (max-width: 1024px) {
+  .sp-goals__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
