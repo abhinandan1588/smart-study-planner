@@ -116,23 +116,23 @@
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  border: 1px solid rgba(16, 24, 40, 0.04);
-  background: var(--c-surface-alt);
+  border: 1px solid var(--c-border);
+  background: var(--c-heat-0);
   padding: 0;
   cursor: default;
 }
 
 .sp-heatmap__cell--l1 {
-  background: #dbeafe;
+  background: var(--c-heat-1);
 }
 .sp-heatmap__cell--l2 {
-  background: #93c5fd;
+  background: var(--c-heat-2);
 }
 .sp-heatmap__cell--l3 {
-  background: #3b82f6;
+  background: var(--c-heat-3);
 }
 .sp-heatmap__cell--l4 {
-  background: #1d4ed8;
+  background: var(--c-heat-4);
 }
 
 .sp-heatmap__cell--empty {

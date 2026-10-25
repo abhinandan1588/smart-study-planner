@@ -5,15 +5,31 @@
  * Every colour pair used for text on a surface clears WCAG AA (4.5:1).
  * Full accessibility validation still needs manual assistive-technology
  * testing and an expert review; these tokens only cover contrast and focus.
+ *
+ * Theming: the light palette lives on `:root`. The dark palette overrides the
+ * same custom properties under `[data-theme='dark']`, which ThemeContext sets
+ * on <html>. Nothing outside this file needs to know a theme exists — every
+ * component reads tokens, so both themes come from one source of truth.
  */
 
 :root {
+  color-scheme: light;
+
   /* --- Brand ---------------------------------------------------------- */
   --c-primary: #2563eb;
   --c-primary-hover: #1d4ed8;
   --c-primary-active: #1e40af;
   --c-primary-soft: #eff6ff;
+  --c-primary-soft-hover: #e0ecfe;
   --c-primary-border: #bfdbfe;
+
+  /* Solid fills that carry --c-text-inverse (white) label text. Kept separate
+     from --c-primary because the dark theme brightens the accent for links and
+     icons, which would drop white-on-accent below AA if fills followed it. */
+  --c-primary-fill: #2563eb;
+  --c-primary-fill-hover: #1d4ed8;
+  --c-primary-fill-active: #1e40af;
+  --c-on-primary-muted: rgba(255, 255, 255, 0.75);
 
   /* --- Neutral surfaces ----------------------------------------------- */
   --c-bg: #f7f8fa;
@@ -44,12 +60,30 @@
   --c-info-soft: #f0f9ff;
   --c-info-border: #b9e3fb;
 
+  /* Deeper status shades for small text and 2px accent bars, where the base
+     status colour is too light to clear AA. */
+  --c-success-strong: #15803d;
+  --c-warning-strong: #d97706;
+
+  /* Status equivalents of --c-primary-fill: solid backgrounds that carry white
+     label text. Identical to the base colours in the light theme. */
+  --c-success-fill: #16a34a;
+  --c-danger-fill: #dc2626;
+  --c-danger-fill-hover: #b91c1c;
+  --c-info-fill: #0369a1;
+
+  /* --- Overlays and placeholders -------------------------------------- */
+  --c-scrim: rgba(16, 24, 40, 0.45);
+  --c-skeleton-base: #e8ebf1;
+  --c-skeleton-sheen: #f4f6f9;
+
   /* --- Admin shell (dark slate sidebar) ------------------------------- */
   --c-admin-sidebar: #101828;
   --c-admin-sidebar-alt: #1d2939;
   --c-admin-sidebar-border: #24334a;
   --c-admin-sidebar-text: #d0d5dd;
   --c-admin-sidebar-muted: #98a2b3;
+  --c-admin-sidebar-accent: #60a5fa;
 
   /* --- Chart series --------------------------------------------------- */
   --c-chart-1: #2563eb;
@@ -58,6 +92,13 @@
   --c-chart-4: #7c3aed;
   --c-chart-5: #0891b2;
   --c-chart-6: #db2777;
+
+  /* Consistency heatmap, lightest to densest. */
+  --c-heat-0: var(--c-surface-alt);
+  --c-heat-1: #dbeafe;
+  --c-heat-2: #93c5fd;
+  --c-heat-3: #3b82f6;
+  --c-heat-4: #1d4ed8;
 
   /* --- Typography ----------------------------------------------------- */
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -125,4 +166,108 @@
   --z-drawer: 40;
   --z-dialog: 60;
   --z-toast: 80;
+}
+
+/* ---------------------------------------------------------------------------
+ * Dark theme
+ *
+ * Overrides colour tokens only — type, spacing, radii, layout and motion are
+ * shared. Surfaces step up in lightness as they come forward (bg → surface →
+ * surface-alt → surface-hover) so elevation reads without extra shadow.
+ * ------------------------------------------------------------------------- */
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* --- Brand ---------------------------------------------------------- */
+  --c-primary: #6aa0ff;
+  --c-primary-hover: #8ab6ff;
+  --c-primary-active: #a8c9ff;
+  --c-primary-soft: #16233d;
+  --c-primary-soft-hover: #1c2d4c;
+  --c-primary-border: #2c4876;
+
+  /* Fills keep the deeper blue so white label text still clears AA. */
+  --c-primary-fill: #2563eb;
+  --c-primary-fill-hover: #1d4ed8;
+  --c-primary-fill-active: #1e40af;
+  --c-on-primary-muted: rgba(255, 255, 255, 0.75);
+
+  /* --- Neutral surfaces ----------------------------------------------- */
+  --c-bg: #0b0f17;
+  --c-surface: #141a24;
+  --c-surface-alt: #1b222e;
+  --c-surface-hover: #202835;
+  --c-border: #27303d;
+  --c-border-strong: #3a4553;
+
+  /* --- Text ------------------------------------------------------------ */
+  --c-text: #e9edf4;
+  --c-text-muted: #9ba7b8;
+  --c-text-subtle: #7a8798;
+  --c-text-inverse: #ffffff;
+
+  /* --- Status ---------------------------------------------------------- */
+  --c-success: #4ade80;
+  --c-success-soft: #0e2a1b;
+  --c-success-border: #1f5137;
+  --c-success-strong: #6ee7a0;
+  --c-warning: #fbbf24;
+  --c-warning-soft: #2c2008;
+  --c-warning-border: #5a4413;
+  --c-warning-strong: #fbbf24;
+  --c-danger: #f87171;
+  --c-danger-soft: #2d1416;
+  --c-danger-border: #5d2628;
+  --c-danger-hover: #fca5a5;
+  --c-info: #56c7f5;
+  --c-info-soft: #0a2433;
+  --c-info-border: #1b4a63;
+
+  /* Kept deep enough for white label text, unlike the brightened base
+     status colours above. */
+  --c-success-fill: #1a7f4b;
+  --c-danger-fill: #c62f2f;
+  --c-danger-fill-hover: #a82525;
+  --c-info-fill: #0b6f9e;
+
+  /* --- Overlays and placeholders -------------------------------------- */
+  --c-scrim: rgba(0, 0, 0, 0.65);
+  --c-skeleton-base: #222b38;
+  --c-skeleton-sheen: #2c3745;
+
+  /* --- Admin shell ----------------------------------------------------- */
+  /* Pushed below --c-bg so the sidebar still separates from the content
+     area once the content area is itself dark. */
+  --c-admin-sidebar: #070a10;
+  --c-admin-sidebar-alt: #161d28;
+  --c-admin-sidebar-border: #222b38;
+  --c-admin-sidebar-text: #c6cedb;
+  --c-admin-sidebar-muted: #8b97a8;
+  --c-admin-sidebar-accent: #6aa0ff;
+
+  /* --- Chart series ---------------------------------------------------- */
+  --c-chart-1: #60a5fa;
+  --c-chart-2: #4ade80;
+  --c-chart-3: #fbbf24;
+  --c-chart-4: #a78bfa;
+  --c-chart-5: #22d3ee;
+  --c-chart-6: #f472b6;
+
+  --c-heat-0: #1b222e;
+  --c-heat-1: #1e3a6b;
+  --c-heat-2: #2b5bad;
+  --c-heat-3: #3b82f6;
+  --c-heat-4: #7cb0ff;
+
+  /* --- Shadows --------------------------------------------------------- */
+  /* Tinted shadows disappear on dark surfaces, so these go to near-black
+     and a little deeper. */
+  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --sh-md: 0 4px 14px rgba(0, 0, 0, 0.55);
+
+  /* --- Focus ring ------------------------------------------------------ */
+  --ring: 0 0 0 3px rgba(106, 160, 255, 0.45);
+  --ring-danger: 0 0 0 3px rgba(248, 113, 113, 0.4);
+  --ring-inverse: 0 0 0 3px rgba(148, 186, 255, 0.5);
 }

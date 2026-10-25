@@ -1,0 +1,132 @@
+/* Appearance control — a compact track-and-thumb switch for the top bar and a
+   three-way segmented group for the settings page. */
+
+.sp-themetoggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  border-radius: var(--r-full);
+}
+
+.sp-themetoggle__track {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 24px;
+  padding: 2px;
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-full);
+  transition:
+    background var(--t-base),
+    border-color var(--t-base);
+}
+
+.sp-themetoggle:hover .sp-themetoggle__track {
+  border-color: var(--c-text-subtle);
+}
+
+.sp-themetoggle__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: var(--c-surface);
+  color: var(--c-warning-strong);
+  border-radius: var(--r-full);
+  box-shadow: var(--sh-sm);
+  transform: translateX(0);
+  transition:
+    transform var(--t-base),
+    color var(--t-base),
+    background var(--t-base);
+}
+
+/* Dark is the "on" end of the track. */
+[data-theme='dark'] .sp-themetoggle__track {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary-border);
+}
+
+[data-theme='dark'] .sp-themetoggle__thumb {
+  transform: translateX(20px);
+  color: var(--c-primary);
+}
+
+.sp-themetoggle:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--ring);
+}
+
+/* Inverse: sits on the dark admin sidebar. */
+.sp-themetoggle--inverse .sp-themetoggle__track {
+  background: var(--c-admin-sidebar-alt);
+  border-color: var(--c-admin-sidebar-border);
+}
+
+.sp-themetoggle--inverse .sp-themetoggle__thumb {
+  background: var(--c-admin-sidebar-text);
+  color: var(--c-admin-sidebar);
+}
+
+.sp-themetoggle--inverse:focus-visible {
+  box-shadow: var(--ring-inverse);
+}
+
+/* --- Segmented (settings page) ----------------------------------------- */
+
+.sp-themeseg {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--c-surface-alt);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  gap: 2px;
+}
+
+.sp-themeseg__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: none;
+  border: 0;
+  border-radius: var(--r-sm);
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
+}
+
+.sp-themeseg__btn:hover {
+  color: var(--c-text);
+}
+
+.sp-themeseg__btn.is-active {
+  background: var(--c-surface);
+  color: var(--c-text);
+  box-shadow: var(--sh-sm);
+}
+
+.sp-themeseg__btn:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--ring);
+}
+
+@media (max-width: 480px) {
+  .sp-themeseg__btn span:not(.sp-visually-hidden) {
+    display: none;
+  }
+
+  .sp-themeseg__btn {
+    padding: var(--sp-2);
+  }
+}

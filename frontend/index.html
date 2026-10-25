@@ -16,6 +16,33 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
     />
     <title>Smart Study Planner</title>
+    <script>
+      /*
+       * Applies the saved theme before first paint so a dark-mode reload never
+       * flashes the light palette. Runs ahead of the bundle and intentionally
+       * duplicates the small amount of logic in src/context/ThemeContext.jsx —
+       * keep the storage key and attribute in sync with it.
+       */
+      (function () {
+        try {
+          var stored = localStorage.getItem('sp-theme');
+          var mode =
+            stored === 'light' || stored === 'dark' || stored === 'system'
+              ? stored
+              : 'system';
+          var dark =
+            mode === 'dark' ||
+            (mode === 'system' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var theme = dark ? 'dark' : 'light';
+          document.documentElement.setAttribute('data-theme', theme);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', dark ? '#0b0f17' : '#f7f8fa');
+        } catch (error) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

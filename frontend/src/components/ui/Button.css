@@ -46,18 +46,18 @@
 /* --- Variants ---------------------------------------------------------- */
 
 .sp-btn--primary {
-  background: var(--c-primary);
-  border-color: var(--c-primary);
+  background: var(--c-primary-fill);
+  border-color: var(--c-primary-fill);
   color: var(--c-text-inverse);
 }
 
 .sp-btn--primary:hover:not(:disabled) {
-  background: var(--c-primary-hover);
-  border-color: var(--c-primary-hover);
+  background: var(--c-primary-fill-hover);
+  border-color: var(--c-primary-fill-hover);
 }
 
 .sp-btn--primary:active:not(:disabled) {
-  background: var(--c-primary-active);
+  background: var(--c-primary-fill-active);
 }
 
 .sp-btn--secondary {
@@ -89,18 +89,18 @@
 }
 
 .sp-btn--subtle:hover:not(:disabled) {
-  background: #e0ecfe;
+  background: var(--c-primary-soft-hover);
 }
 
 .sp-btn--danger {
-  background: var(--c-danger);
-  border-color: var(--c-danger);
+  background: var(--c-danger-fill);
+  border-color: var(--c-danger-fill);
   color: var(--c-text-inverse);
 }
 
 .sp-btn--danger:hover:not(:disabled) {
-  background: var(--c-danger-hover);
-  border-color: var(--c-danger-hover);
+  background: var(--c-danger-fill-hover);
+  border-color: var(--c-danger-fill-hover);
 }
 
 .sp-btn--danger:focus-visible {

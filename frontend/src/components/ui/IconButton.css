@@ -68,7 +68,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--c-danger);
+  background: var(--c-danger-fill);
   color: var(--c-text-inverse);
   border-radius: var(--r-full);
   font-size: 10px;

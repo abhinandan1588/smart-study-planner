@@ -113,7 +113,7 @@
   flex: none;
   min-width: 20px;
   padding: 1px 6px;
-  background: var(--c-danger);
+  background: var(--c-danger-fill);
   color: var(--c-text-inverse);
   border-radius: var(--r-full);
   font-size: 11px;
@@ -172,7 +172,7 @@
 }
 
 .sp-shell--admin .sp-shell__navlink.is-active::before {
-  background: #60a5fa;
+  background: var(--c-admin-sidebar-accent);
 }
 
 .sp-shell--admin .sp-shell__navlink:focus-visible {
@@ -413,7 +413,7 @@
   z-index: calc(var(--z-drawer) - 1);
   border: 0;
   padding: 0;
-  background: rgba(16, 24, 40, 0.45);
+  background: var(--c-scrim);
   cursor: pointer;
 }
 

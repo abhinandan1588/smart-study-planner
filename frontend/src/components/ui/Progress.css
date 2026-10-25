@@ -54,7 +54,7 @@
   background: var(--c-success);
 }
 .sp-progress__fill--warning {
-  background: #d97706;
+  background: var(--c-warning-strong);
 }
 .sp-progress__fill--danger {
   background: var(--c-danger);
@@ -84,7 +84,7 @@
   stroke: var(--c-success);
 }
 .sp-ring__fill--warning {
-  stroke: #d97706;
+  stroke: var(--c-warning-strong);
 }
 .sp-ring__fill--danger {
   stroke: var(--c-danger);

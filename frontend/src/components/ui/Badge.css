@@ -41,7 +41,7 @@
 .sp-badge--success {
   background: var(--c-success-soft);
   border-color: var(--c-success-border);
-  color: #15803d;
+  color: var(--c-success-strong);
 }
 
 .sp-badge--warning {

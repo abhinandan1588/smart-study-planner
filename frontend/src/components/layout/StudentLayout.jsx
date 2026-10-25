@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Icon from '../ui/Icon';
 import IconButton from '../ui/IconButton';
+import ThemeToggle from '../ui/ThemeToggle';
 import Logo from './Logo';
 import SidebarNav from './SidebarNav';
 import UserMenu from './UserMenu';
@@ -158,6 +159,7 @@ export default function StudentLayout() {
           </form>
 
           <div className="sp-shell__topactions">
+            <ThemeToggle />
             <IconButton
               icon="bell"
               label={

@@ -31,7 +31,7 @@
   border-left-color: var(--c-danger);
 }
 .sp-toast--warning {
-  border-left-color: #d97706;
+  border-left-color: var(--c-warning-strong);
 }
 .sp-toast--info {
   border-left-color: var(--c-primary);

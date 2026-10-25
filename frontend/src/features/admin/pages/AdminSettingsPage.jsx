@@ -11,6 +11,7 @@ import ErrorState from '../../../components/ui/ErrorState';
 import Input from '../../../components/ui/Input';
 import { SkeletonCard } from '../../../components/ui/Skeleton';
 import Tabs, { TabPanel } from '../../../components/ui/Tabs';
+import ThemeToggle from '../../../components/ui/ThemeToggle';
 import { useToast } from '../../../components/ui/ToastProvider';
 import useApi from '../../../hooks/useApi';
 import useAuth from '../../../hooks/useAuth';
@@ -233,6 +234,13 @@ function ProfileSection() {
             </Button>
           </div>
         </form>
+      </Card>
+
+      <Card
+        title="Appearance"
+        subtitle="Applies to this browser only, and takes effect immediately"
+      >
+        <ThemeToggle shape="segmented" />
       </Card>
 
       <Card title="Change password" subtitle="You will stay signed in on this device">

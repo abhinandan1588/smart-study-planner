@@ -1,4 +1,5 @@
 .sp-auth {
+  position: relative;
   min-height: 100%;
   display: flex;
   flex-direction: column;
@@ -7,6 +8,12 @@
   gap: var(--sp-5);
   padding: var(--sp-8) var(--sp-4);
   background: var(--c-bg);
+}
+
+.sp-auth__themetoggle {
+  position: absolute;
+  top: var(--sp-5);
+  right: var(--sp-5);
 }
 
 .sp-auth__card {
@@ -104,7 +111,7 @@
 .sp-auth__alert--success {
   background: var(--c-success-soft);
   border-color: var(--c-success-border);
-  color: #15803d;
+  color: var(--c-success-strong);
 }
 
 .sp-auth__alert--info {

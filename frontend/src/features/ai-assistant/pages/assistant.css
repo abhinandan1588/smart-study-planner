@@ -119,8 +119,8 @@
 }
 
 .sp-msg--user .sp-msg__bubble {
-  background: var(--c-primary);
-  border-color: var(--c-primary);
+  background: var(--c-primary-fill);
+  border-color: var(--c-primary-fill);
   color: var(--c-text-inverse);
 }
 
@@ -132,7 +132,7 @@
 }
 
 .sp-msg--user .sp-msg__time {
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--c-on-primary-muted);
 }
 
 .sp-msg__caret {

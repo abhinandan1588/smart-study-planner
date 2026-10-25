@@ -27,5 +27,6 @@ export { default as Skeleton, SkeletonCard, SkeletonRows } from './Skeleton';
 export { default as Spinner } from './Spinner';
 export { default as Tabs, TabPanel } from './Tabs';
 export { default as Textarea } from './Textarea';
+export { default as ThemeToggle } from './ThemeToggle';
 export { default as ToastProvider, useToast } from './ToastProvider';
 export { default as Tooltip } from './Tooltip';

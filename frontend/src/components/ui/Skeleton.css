@@ -9,9 +9,9 @@
   display: block;
   background: linear-gradient(
     90deg,
-    var(--c-surface-alt) 25%,
-    #e8ebf1 37%,
-    var(--c-surface-alt) 63%
+    var(--c-skeleton-base) 25%,
+    var(--c-skeleton-sheen) 37%,
+    var(--c-skeleton-base) 63%
   );
   background-size: 400% 100%;
   animation: sp-shimmer 1.3s ease-in-out infinite;

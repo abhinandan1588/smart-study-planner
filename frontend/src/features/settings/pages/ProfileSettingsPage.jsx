@@ -10,6 +10,7 @@ import ErrorState from '../../../components/ui/ErrorState';
 import IconButton from '../../../components/ui/IconButton';
 import Input from '../../../components/ui/Input';
 import Select from '../../../components/ui/Select';
+import ThemeToggle from '../../../components/ui/ThemeToggle';
 import { useToast } from '../../../components/ui/ToastProvider';
 import useApi from '../../../hooks/useApi';
 import { useAuth } from '../../../context/AuthContext';
@@ -509,6 +510,19 @@ export default function ProfileSettingsPage() {
               ))}
               <p className="sp-muted" style={{ fontSize: 'var(--fs-xs)' }}>
                 Saved with your study preferences.
+              </p>
+            </div>
+          </Card>
+
+          <Card
+            title="Appearance"
+            subtitle="Applies to this browser only, and takes effect immediately"
+          >
+            <div className="sp-stack">
+              <ThemeToggle shape="segmented" />
+              <p className="sp-muted" style={{ fontSize: 'var(--fs-xs)' }}>
+                System follows your device setting, so the app switches to dark
+                when your device does.
               </p>
             </div>
           </Card>

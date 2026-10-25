@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import ThemeToggle from '../ui/ThemeToggle';
 import Logo from './Logo';
 import './AuthLayout.css';
 
@@ -6,6 +7,12 @@ import './AuthLayout.css';
 export default function AuthLayout({ title, subtitle, children, footer, wide = false }) {
   return (
     <main className="sp-auth">
+      {/* Reachable before sign-in, so the preference can be set from the
+          login screen rather than only from inside the app. */}
+      <div className="sp-auth__themetoggle">
+        <ThemeToggle />
+      </div>
+
       <div className={`sp-auth__card ${wide ? 'sp-auth__card--wide' : ''}`.trim()}>
         <Link to="/login" className="sp-auth__brand">
           <Logo size={30} />

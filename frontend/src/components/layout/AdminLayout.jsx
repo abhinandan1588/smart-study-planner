@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import Badge from '../ui/Badge';
 import IconButton from '../ui/IconButton';
+import ThemeToggle from '../ui/ThemeToggle';
 import Logo from './Logo';
 import SidebarNav from './SidebarNav';
 import UserMenu from './UserMenu';
@@ -148,6 +149,7 @@ export default function AdminLayout() {
           </nav>
 
           <div className="sp-shell__topactions">
+            <ThemeToggle />
             <UserMenu settingsPath="/admin/settings" />
           </div>
         </header>

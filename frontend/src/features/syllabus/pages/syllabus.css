@@ -187,16 +187,16 @@
 }
 
 .sp-statusgroup__btn[aria-pressed='true'] {
-  background: var(--c-primary);
+  background: var(--c-primary-fill);
   color: var(--c-text-inverse);
 }
 
 .sp-statusgroup__btn[aria-pressed='true'].is-progress {
-  background: var(--c-info);
+  background: var(--c-info-fill);
 }
 
 .sp-statusgroup__btn[aria-pressed='true'].is-done {
-  background: var(--c-success);
+  background: var(--c-success-fill);
 }
 
 .sp-statusgroup__btn:disabled {
